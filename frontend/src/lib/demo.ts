@@ -45,7 +45,7 @@ export function makeDemo(mode: Mode, budgetRub: number, demandPercent: number) {
       { zone_id: "fleet", site_id: "west", minutes: 27 }, { zone_id: "fleet", site_id: "centre", minutes: 16 }, { zone_id: "fleet", site_id: "east", minutes: 14 }, { zone_id: "fleet", site_id: "south", minutes: 5 },
     ],
     parameters: {
-      mode, risk: "worst_case", years: [2027, 2028], annual_budgets_rub: [budgetRub * 0.7, budgetRub * 0.3], total_budget_rub: budgetRub,
+      mode, risk: "worst_case" as const, years: [2027, 2028], annual_budgets_rub: [budgetRub * 0.7, budgetRub * 0.3], total_budget_rub: budgetRub,
       sale_rub_per_kwh: 32, purchase_rub_per_kwh: 9, discount_rate: 0.12,
       pv_hourly_factor: [0, 0, 0, 0, 0, 0.05, 0.12, 0.23, 0.39, 0.55, 0.7, 0.78, 0.8, 0.75, 0.62, 0.47, 0.28, 0.12, 0.02, 0, 0, 0, 0, 0],
       storage_efficiency: 0.9, storage_max_hours: 2, storage_degradation_rub_per_kwh: 2,

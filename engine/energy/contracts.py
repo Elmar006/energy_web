@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 from typing import Literal
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class Provenance(BaseModel):
+class FiniteModel(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
+
+class Provenance(FiniteModel):
     source: str = Field(min_length=1)
     kind: Literal["observed", "derived", "assumed"]
     captured_at: str | None = None
 
 
-class DatasetReference(BaseModel):
+class DatasetReference(FiniteModel):
     name: str = Field(min_length=1)
     role: Literal["demand_sessions", "candidate_sites", "grid", "tariff", "routing", "other"]
     kind: Literal["observed", "derived", "assumed"]
@@ -20,9 +24,9 @@ class DatasetReference(BaseModel):
     captured_at: str | None = None
 
 
-class Zone(BaseModel):
-    id: str
-    name: str
+class Zone(FiniteModel):
+    id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     group: Literal["private", "taxi", "fleet", "corridor"] = "private"
@@ -38,8 +42,8 @@ class Zone(BaseModel):
         return self
 
 
-class ChargerOption(BaseModel):
-    id: str
+class ChargerOption(FiniteModel):
+    id: str = Field(min_length=1)
     ports: int = Field(gt=0)
     charger_kw: float = Field(gt=0)
     connection_kw: float = Field(gt=0)
@@ -48,8 +52,8 @@ class ChargerOption(BaseModel):
     allowed_groups: list[Literal["private", "taxi", "fleet", "corridor"]] = Field(default_factory=lambda: ["private", "taxi", "fleet", "corridor"])
 
 
-class GridNode(BaseModel):
-    id: str
+class GridNode(FiniteModel):
+    id: str = Field(min_length=1)
     headroom_kw: list[float] = Field(min_length=24, max_length=24)
     upgrade_kw: float = Field(default=0, ge=0)
     upgrade_capex_rub: float = Field(default=0, ge=0)
@@ -62,9 +66,9 @@ class GridNode(BaseModel):
         return self
 
 
-class Site(BaseModel):
-    id: str
-    name: str
+class Site(FiniteModel):
+    id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     grid_node_id: str
@@ -78,8 +82,8 @@ class Site(BaseModel):
     provenance: Provenance
 
 
-class Scenario(BaseModel):
-    id: str
+class Scenario(FiniteModel):
+    id: str = Field(min_length=1)
     demand_multiplier: list[float]
     tariff_multiplier: float = Field(default=1, gt=0)
     pv_multiplier: float = Field(default=1, ge=0)
@@ -92,15 +96,18 @@ class Scenario(BaseModel):
         return self
 
 
-class TravelEdge(BaseModel):
-    zone_id: str
-    site_id: str
+class TravelEdge(FiniteModel):
+    zone_id: str = Field(min_length=1)
+    site_id: str = Field(min_length=1)
     minutes: float = Field(ge=0)
 
 
-class Parameters(BaseModel):
+class Parameters(FiniteModel):
     mode: Literal["operator", "city"]
-    risk: Literal["worst_case", "expected"] = "worst_case"
+    risk: Literal["worst_case", "expected", "expected_cvar"] = "worst_case"
+    cvar_alpha: float = Field(default=0.9, gt=0, lt=1, allow_inf_nan=False)
+    max_cvar_loss_rub: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    max_cvar_unmet_kwh: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     years: list[int] = Field(min_length=1)
     annual_budgets_rub: list[float] = Field(min_length=1)
     total_budget_rub: float = Field(ge=0)
@@ -129,8 +136,8 @@ class Parameters(BaseModel):
         return self
 
 
-class PlanningInput(BaseModel):
-    id: str
+class PlanningInput(FiniteModel):
+    id: str = Field(min_length=1)
     zones: list[Zone]
     sites: list[Site]
     options: list[ChargerOption]
@@ -164,10 +171,19 @@ class PlanningInput(BaseModel):
             raise ValueError("scenario ids must be unique")
         if any(len(s.demand_multiplier) != len(self.parameters.years) for s in self.scenarios):
             raise ValueError("scenario demand_multiplier must match years")
-        if self.parameters.risk == "expected":
+        if self.parameters.risk in ("expected", "expected_cvar"):
             probabilities = [s.probability for s in self.scenarios]
             if any(p is None for p in probabilities) or abs(sum(probabilities) - 1) > 1e-8:
-                raise ValueError("expected mode requires probabilities summing to one")
+                raise ValueError("probabilistic risk mode requires probabilities summing to one")
+        operator_cap = self.parameters.max_cvar_loss_rub
+        city_cap = self.parameters.max_cvar_unmet_kwh
+        if self.parameters.risk == "expected_cvar":
+            if self.parameters.mode == "operator" and (operator_cap is None or city_cap is not None):
+                raise ValueError("operator CVaR requires only max_cvar_loss_rub")
+            if self.parameters.mode == "city" and (city_cap is None or operator_cap is not None):
+                raise ValueError("city CVaR requires only max_cvar_unmet_kwh")
+        elif operator_cap is not None or city_cap is not None:
+            raise ValueError("CVaR threshold requires expected_cvar risk mode")
         if set(self.locked_site_ids) & set(self.excluded_site_ids):
             raise ValueError("site cannot be locked and excluded")
         if (set(self.locked_site_ids) | set(self.excluded_site_ids)) - sites:

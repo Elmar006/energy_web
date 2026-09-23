@@ -22,6 +22,7 @@ type Optimization = {
   unmet_kwh: Record<string, number>;
   cashflow_rub: Record<string, number>;
   diagnostic: string | null;
+  risk_metrics?: { cvar_alpha?: number; cvar_loss_rub?: number; cvar_unmet_kwh?: number };
 };
 type Simulation = {
   year: number; scenario_id: string; seed: number;
@@ -36,6 +37,7 @@ type ScenarioSummary = { id: string; name: string; sha256: string; created_at: s
 
 const money = (value: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value / 1_000_000);
 const number = (value: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value);
+const precise = (value: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value);
 const plural = (value: number, one: string, few: string, many: string) => {
   const mod100 = value % 100, mod10 = value % 10;
   return value + " " + (mod100 >= 11 && mod100 <= 14 ? many : mod10 === 1 ? one : mod10 >= 2 && mod10 <= 4 ? few : many);
@@ -236,7 +238,7 @@ export default function Home() {
           {error && <div className="error-banner" role="alert">{error}</div>}
           {runId && !result && run?.state !== "failed" && <section className="calculating" role="status" aria-live="polite"><span className="loading-orbit" /><div><strong>Рассчитываем инфраструктуру</strong><p>Проверяем бюджет, энергосеть и работу станций. Состояние: {run?.state === "running" ? "выполняется" : "в очереди"}.</p></div></section>}
 
-          {plan ? <section className="results" aria-labelledby="results-title" aria-live="polite">
+          {plan && plan.status !== "optimal" && plan.status !== "feasible" ? <section className="empty-result" role="alert"><span className="empty-icon"><Info size={24} /></span><div><h2>{plan.status === "infeasible" ? "Ограничения несовместимы" : "Не удалось получить план"}</h2><p>{plan.diagnostic || "Проверьте исходные данные и ограничения сценария."}</p></div></section> : plan ? <section className="results" aria-labelledby="results-title" aria-live="polite">
             <div className="results-heading"><div><p className="eyebrow">РЕЗУЛЬТАТ / {plan.status === "optimal" ? "ОПТИМАЛЬНОЕ РЕШЕНИЕ" : "ДОПУСТИМОЕ РЕШЕНИЕ"}</p><h2 id="results-title">План развития сети</h2></div><span className="result-badge"><Check size={15} /> Расчёт завершён</span></div>
             <div className="metric-grid">
               <div className="metric-card"><span>Обслуженный спрос</span><strong>{rate}%</strong><small>Базовый сценарий · суммарно</small></div>
@@ -250,6 +252,7 @@ export default function Home() {
                   const site = activeSpec.sites.find((s) => s.id === entry.site_id);
                   return <li key={entry.site_id}><span className="station-indicator" /><div><strong>{site?.name || entry.site_id}</strong><small>{entry.option_id.toUpperCase()} · ввод {entry.year}</small></div><span className="year-pill">{entry.year}</span></li>;
                 })}</ul>
+                {plan.selected.length === 0 && <p className="detail-foot"><Info size={16} /> {activeSpec.parameters.mode === "operator" ? "При заданных условиях строительство не улучшает экономический результат." : "При заданных ограничениях новые площадки не выбраны."}</p>}
                 {plan.grid_upgrades.length > 0 && <p className="detail-foot"><Zap size={16} /> Усиление сети: {plan.grid_upgrades.map((x) => x.grid_node_id).join(", ")}</p>}
                 {plan.solar.length > 0 && <p className="detail-foot"><BatteryCharging size={16} /> Локальная генерация: {plan.solar.map((x) => `${x.site_id} ${x.kw} кВт`).join(", ")}</p>}
               </div>
@@ -259,6 +262,8 @@ export default function Home() {
                   const percent = used + missed ? used / (used + missed) * 100 : 0;
                   return <div key={key} className="scenario-row"><div><strong>{key}</strong><span>{Math.round(percent)}% покрыто</span></div><div className="bar-track" role="img" aria-label={`${key}: обслужено ${number(used)} киловатт-часов из ${number(used + missed)}`}><span style={{ width: `${percent}%` }} /></div><small>{number(used)} / {number(used + missed)} кВт·ч</small></div>;
                 })}</div>
+                {plan.risk_metrics?.cvar_alpha !== undefined && (plan.risk_metrics.cvar_loss_rub !== undefined || plan.risk_metrics.cvar_unmet_kwh !== undefined) &&
+                  <div className="risk-metric"><span>CVaR · худшие {precise((1 - plan.risk_metrics.cvar_alpha) * 100)}% вероятности</span><strong>{plan.risk_metrics.cvar_loss_rub !== undefined ? `${precise(plan.risk_metrics.cvar_loss_rub)} ₽` : `${precise(plan.risk_metrics.cvar_unmet_kwh ?? 0)} кВт·ч`}</strong><small>Допустимый предел: {plan.risk_metrics.cvar_loss_rub !== undefined ? `${precise(activeSpec.parameters.max_cvar_loss_rub ?? 0)} ₽ убытка NPV` : `${precise(activeSpec.parameters.max_cvar_unmet_kwh ?? 0)} кВт·ч необслуженного спроса`}. Среднее по худшему хвосту заданных сценариев.</small></div>}
                 <p className="detail-foot"><Info size={16} /> При изменении предположений план нужно пересчитать.</p>
               </div>
             </div>

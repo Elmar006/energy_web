@@ -50,9 +50,76 @@ schemas = {
         "state": {"type": "string", "enum": ["queued", "running", "succeeded", "failed", "cancelled"]},
         "attempts": {"type": "integer"}, "error_code": {"type": ["string", "null"]},
         "error_detail": {"type": ["string", "null"]}}},
+    "RiskMetrics": {"type": "object", "properties": {
+        "cvar_alpha": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+        "cvar_loss_rub": {"type": "number", "minimum": 0},
+        "cvar_unmet_kwh": {"type": "number", "minimum": 0}}},
+    "InvestmentYear": {"type": "object", "required": ["year", "rub"], "properties": {
+        "year": {"type": "integer"}, "rub": {"type": "number", "minimum": 0}}},
+    "EnergyAudit": {"type": "object", "required": [
+        "scenario_id", "year", "site_id", "served_kwh", "grid_kwh", "pv_used_kwh",
+        "pv_available_kwh", "battery_charge_kwh", "battery_discharge_kwh",
+        "peak_grid_kw", "peak_station_kw", "battery_soc_start_kwh", "battery_soc_end_kwh"],
+        "properties": {**{name: {"type": "number", "minimum": 0} for name in (
+            "served_kwh", "grid_kwh", "pv_used_kwh", "pv_available_kwh",
+            "battery_charge_kwh", "battery_discharge_kwh", "peak_grid_kw", "peak_station_kw",
+            "battery_soc_start_kwh", "battery_soc_end_kwh")},
+            "scenario_id": {"type": "string"}, "site_id": {"type": "string"}, "year": {"type": "integer"}}},
+    "PhysicalVerification": {"type": "object", "properties": {
+        **{name: {"type": "number", "minimum": 0} for name in (
+            "max_hourly_energy_balance_error_kwh", "max_relative_energy_balance_error",
+            "max_grid_node_overload_kw", "max_station_connection_overload_kw",
+            "max_station_equipment_overload_kw", "max_pv_overuse_kw",
+            "max_budget_overrun_rub")},
+        "energy_audit_rows_total": {"type": "integer", "minimum": 0},
+        "energy_audit_truncated": {"type": "boolean"}, "passed": {"type": "boolean"}}},
+    "OptimizationResult": {"type": "object", "required": [
+        "status", "objective", "gap", "selected", "grid_upgrades", "battery", "solar",
+        "served_kwh", "unmet_kwh", "cashflow_rub", "diagnostic", "risk_metrics",
+        "investment_rub_by_year", "energy_audit", "verification"],
+        "properties": {
+            "status": {"type": "string", "enum": ["optimal", "feasible", "infeasible", "error"]},
+            "objective": {"type": ["number", "null"]}, "gap": {"type": ["number", "null"]},
+            "selected": {"type": "array", "items": {"type": "object",
+                "required": ["site_id", "option_id", "year"], "properties": {
+                    "site_id": {"type": "string"}, "option_id": {"type": "string"}, "year": {"type": "integer"}}}},
+            "grid_upgrades": {"type": "array", "items": {"type": "object",
+                "required": ["grid_node_id", "year"], "properties": {
+                    "grid_node_id": {"type": "string"}, "year": {"type": "integer"}}}},
+            "battery": {"type": "array", "items": {"type": "object",
+                "required": ["site_id", "year", "kwh"], "properties": {
+                    "site_id": {"type": "string"}, "year": {"type": "integer"}, "kwh": {"type": "number"}}}},
+            "solar": {"type": "array", "items": {"type": "object",
+                "required": ["site_id", "year", "kw"], "properties": {
+                    "site_id": {"type": "string"}, "year": {"type": "integer"}, "kw": {"type": "number"}}}},
+            "served_kwh": {"type": "object", "additionalProperties": {"type": "number"}},
+            "unmet_kwh": {"type": "object", "additionalProperties": {"type": "number"}},
+            "cashflow_rub": {"type": "object", "additionalProperties": {"type": "number"}},
+            "diagnostic": {"type": ["string", "null"]}, "risk_metrics": ref("RiskMetrics"),
+            "investment_rub_by_year": {"type": "array", "items": ref("InvestmentYear")},
+            "energy_audit": {"type": "array", "items": ref("EnergyAudit")},
+            "verification": ref("PhysicalVerification")}},
+    "SimulationResult": {"type": "object", "required": [
+        "year", "scenario_id", "seed", "arrivals", "served_sessions", "refused_sessions",
+        "mean_wait_minutes", "p95_wait_minutes", "energy_kwh", "partial_energy_kwh",
+        "last_completion_minute", "served_by_zone", "refused_by_zone", "energy_by_site_kwh", "assumptions"],
+        "properties": {
+            "year": {"type": "integer"}, "scenario_id": {"type": "string"}, "seed": {"type": "integer"},
+            "arrivals": {"type": "integer", "minimum": 0},
+            "served_sessions": {"type": "integer", "minimum": 0},
+            "refused_sessions": {"type": "integer", "minimum": 0},
+            "mean_wait_minutes": {"type": ["number", "null"], "minimum": 0},
+            "p95_wait_minutes": {"type": ["number", "null"], "minimum": 0},
+            "energy_kwh": {"type": "number", "minimum": 0},
+            "partial_energy_kwh": {"type": "number", "minimum": 0},
+            "last_completion_minute": {"type": ["number", "null"], "minimum": 0, "maximum": 1440},
+            "served_by_zone": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+            "refused_by_zone": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+            "energy_by_site_kwh": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}},
+            "assumptions": {"type": "array", "items": {"type": "string"}}}},
     "PlanResult": {"type": "object", "required": ["optimization", "simulation", "explanations", "metadata"],
-                   "properties": {"optimization": {"type": "object"},
-                                  "simulation": {"type": "array", "items": {"type": "object"}},
+                   "properties": {"optimization": ref("OptimizationResult"),
+                                  "simulation": {"type": "array", "items": ref("SimulationResult")},
                                   "explanations": {"type": "array", "items": {"type": "object"}},
                                   "metadata": {"type": "object"}}},
     "DatasetManifest": {"type": "object", "required": ["id", "name", "kind", "source", "checksum"],

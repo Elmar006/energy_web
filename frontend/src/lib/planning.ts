@@ -34,6 +34,10 @@ export type PlanningSpec = {
     years: number[];
     mode: "city" | "operator";
     total_budget_rub: number;
+    risk?: "worst_case" | "expected" | "expected_cvar";
+    cvar_alpha?: number;
+    max_cvar_loss_rub?: number | null;
+    max_cvar_unmet_kwh?: number | null;
   };
 };
 

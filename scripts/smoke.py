@@ -56,8 +56,15 @@ def main() -> None:
     assert current["state"] == "succeeded", current
     result = call("GET", f"/api/v1/runs/{run['id']}/results")
     assert result["optimization"]["status"] in ("optimal", "feasible"), result
+    assert result["optimization"]["verification"]["passed"] is True
+    assert result["optimization"]["investment_rub_by_year"]
+    assert result["optimization"]["energy_audit"]
     assert result["optimization"]["selected"], "no sites selected"
     assert result["simulation"], "simulation missing"
+    for sample in result["simulation"]:
+        assert sample["arrivals"] == sample["served_sessions"] + sample["refused_sessions"]
+        assert 0 <= sample["partial_energy_kwh"] <= sample["energy_kwh"]
+        assert sample["last_completion_minute"] is None or sample["last_completion_minute"] <= 1440
     assert result["explanations"], "counterfactual explanation missing"
     corridor = call("POST", "/api/v1/corridors/check", {
         "route_km": 300, "battery_usable_kwh": 60, "initial_soc": 1,
@@ -126,6 +133,28 @@ def main() -> None:
         raise AssertionError("imported scenario did not finish within 180 seconds")
     assert imported_state["run"]["state"] == "succeeded", imported_state
     assert imported_state["result"]["optimization"]["selected"][0]["site_id"] == "site-kazan-example"
+    cvar_spec = json.loads(json.dumps(imported_spec))
+    cvar_spec["id"] = "smoke-cvar-city"
+    cvar_spec["scenarios"] = [
+        {"id": "base", "demand_multiplier": [1], "probability": 0.9},
+        {"id": "growth", "demand_multiplier": [2], "probability": 0.1},
+    ]
+    cvar_spec["parameters"].update({"risk": "expected_cvar", "cvar_alpha": 0.9,
+                                    "max_cvar_unmet_kwh": 0})
+    cvar_saved = call("POST", "/api/v1/scenarios", {"name": "smoke-cvar-city", "spec": cvar_spec})
+    cvar_run = call("POST", f"/api/v1/scenarios/{cvar_saved['id']}/runs", key=str(uuid.uuid4()))
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        cvar_state = call("GET", f"/api/v1/runs/{cvar_run['id']}")
+        if cvar_state["state"] in ("succeeded", "failed", "cancelled"):
+            break
+        time.sleep(2)
+    else:
+        raise AssertionError("CVaR scenario did not finish")
+    assert cvar_state["state"] == "succeeded", cvar_state
+    cvar_result = call("GET", f"/api/v1/runs/{cvar_run['id']}/results")
+    assert cvar_result["optimization"]["status"] == "optimal", cvar_result
+    assert cvar_result["optimization"]["risk_metrics"]["cvar_unmet_kwh"] == 0
     extra_path = os.environ.get("ENERGY_EXTRA_SCENARIO")
     if extra_path:
         extra_spec = json.loads(Path(extra_path).read_text(encoding="utf-8"))

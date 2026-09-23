@@ -26,6 +26,7 @@
       "ChargerOption": {
         "properties": {
           "id": {
+            "minLength": 1,
             "title": "Id",
             "type": "string"
           },
@@ -155,6 +156,7 @@
       "GridNode": {
         "properties": {
           "id": {
+            "minLength": 1,
             "title": "Id",
             "type": "string"
           },
@@ -205,10 +207,44 @@
             "default": "worst_case",
             "enum": [
               "worst_case",
-              "expected"
+              "expected",
+              "expected_cvar"
             ],
             "title": "Risk",
             "type": "string"
+          },
+          "cvar_alpha": {
+            "default": 0.9,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Cvar Alpha",
+            "type": "number"
+          },
+          "max_cvar_loss_rub": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Cvar Loss Rub"
+          },
+          "max_cvar_unmet_kwh": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Cvar Unmet Kwh"
           },
           "years": {
             "items": {
@@ -342,6 +378,7 @@
       "Scenario": {
         "properties": {
           "id": {
+            "minLength": 1,
             "title": "Id",
             "type": "string"
           },
@@ -389,10 +426,12 @@
       "Site": {
         "properties": {
           "id": {
+            "minLength": 1,
             "title": "Id",
             "type": "string"
           },
           "name": {
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -481,10 +520,12 @@
       "TravelEdge": {
         "properties": {
           "zone_id": {
+            "minLength": 1,
             "title": "Zone Id",
             "type": "string"
           },
           "site_id": {
+            "minLength": 1,
             "title": "Site Id",
             "type": "string"
           },
@@ -505,10 +546,12 @@
       "Zone": {
         "properties": {
           "id": {
+            "minLength": 1,
             "title": "Id",
             "type": "string"
           },
           "name": {
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -743,6 +786,7 @@
       "ScenarioSpec": {
         "properties": {
           "id": {
+            "minLength": 1,
             "title": "Id",
             "type": "string"
           },
@@ -1055,6 +1099,421 @@
           }
         }
       },
+      "RiskMetrics": {
+        "type": "object",
+        "properties": {
+          "cvar_alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1
+          },
+          "cvar_loss_rub": {
+            "type": "number",
+            "minimum": 0
+          },
+          "cvar_unmet_kwh": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "InvestmentYear": {
+        "type": "object",
+        "required": [
+          "year",
+          "rub"
+        ],
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "rub": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "EnergyAudit": {
+        "type": "object",
+        "required": [
+          "scenario_id",
+          "year",
+          "site_id",
+          "served_kwh",
+          "grid_kwh",
+          "pv_used_kwh",
+          "pv_available_kwh",
+          "battery_charge_kwh",
+          "battery_discharge_kwh",
+          "peak_grid_kw",
+          "peak_station_kw",
+          "battery_soc_start_kwh",
+          "battery_soc_end_kwh"
+        ],
+        "properties": {
+          "served_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "grid_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "pv_used_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "pv_available_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "battery_charge_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "battery_discharge_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "peak_grid_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "peak_station_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "battery_soc_start_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "battery_soc_end_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "scenario_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          }
+        }
+      },
+      "PhysicalVerification": {
+        "type": "object",
+        "properties": {
+          "max_hourly_energy_balance_error_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_relative_energy_balance_error": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_grid_node_overload_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_station_connection_overload_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_station_equipment_overload_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_pv_overuse_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_budget_overrun_rub": {
+            "type": "number",
+            "minimum": 0
+          },
+          "energy_audit_rows_total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "energy_audit_truncated": {
+            "type": "boolean"
+          },
+          "passed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OptimizationResult": {
+        "type": "object",
+        "required": [
+          "status",
+          "objective",
+          "gap",
+          "selected",
+          "grid_upgrades",
+          "battery",
+          "solar",
+          "served_kwh",
+          "unmet_kwh",
+          "cashflow_rub",
+          "diagnostic",
+          "risk_metrics",
+          "investment_rub_by_year",
+          "energy_audit",
+          "verification"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "optimal",
+              "feasible",
+              "infeasible",
+              "error"
+            ]
+          },
+          "objective": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "gap": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "selected": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "site_id",
+                "option_id",
+                "year"
+              ],
+              "properties": {
+                "site_id": {
+                  "type": "string"
+                },
+                "option_id": {
+                  "type": "string"
+                },
+                "year": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "grid_upgrades": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "grid_node_id",
+                "year"
+              ],
+              "properties": {
+                "grid_node_id": {
+                  "type": "string"
+                },
+                "year": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "battery": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "site_id",
+                "year",
+                "kwh"
+              ],
+              "properties": {
+                "site_id": {
+                  "type": "string"
+                },
+                "year": {
+                  "type": "integer"
+                },
+                "kwh": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "solar": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "site_id",
+                "year",
+                "kw"
+              ],
+              "properties": {
+                "site_id": {
+                  "type": "string"
+                },
+                "year": {
+                  "type": "integer"
+                },
+                "kw": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "served_kwh": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "unmet_kwh": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "cashflow_rub": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "diagnostic": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "risk_metrics": {
+            "$ref": "#/components/schemas/RiskMetrics"
+          },
+          "investment_rub_by_year": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvestmentYear"
+            }
+          },
+          "energy_audit": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnergyAudit"
+            }
+          },
+          "verification": {
+            "$ref": "#/components/schemas/PhysicalVerification"
+          }
+        }
+      },
+      "SimulationResult": {
+        "type": "object",
+        "required": [
+          "year",
+          "scenario_id",
+          "seed",
+          "arrivals",
+          "served_sessions",
+          "refused_sessions",
+          "mean_wait_minutes",
+          "p95_wait_minutes",
+          "energy_kwh",
+          "partial_energy_kwh",
+          "last_completion_minute",
+          "served_by_zone",
+          "refused_by_zone",
+          "energy_by_site_kwh",
+          "assumptions"
+        ],
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "scenario_id": {
+            "type": "string"
+          },
+          "seed": {
+            "type": "integer"
+          },
+          "arrivals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "served_sessions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "refused_sessions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mean_wait_minutes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "p95_wait_minutes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "energy_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "partial_energy_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "last_completion_minute": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "served_by_zone": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "refused_by_zone": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "energy_by_site_kwh": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "assumptions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "PlanResult": {
         "type": "object",
         "required": [
@@ -1065,12 +1524,12 @@
         ],
         "properties": {
           "optimization": {
-            "type": "object"
+            "$ref": "#/components/schemas/OptimizationResult"
           },
           "simulation": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/SimulationResult"
             }
           },
           "explanations": {

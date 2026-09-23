@@ -11,6 +11,17 @@ type Point = { id: string; name: string; kind: "site" | "demand"; subtitle: stri
 
 type YMapsRuntime = typeof import("@yandex/ymaps3-types");
 let apiPromise: Promise<YMapsRuntime> | null = null;
+const MAP_LOAD_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(promise: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error("Превышено время загрузки Яндекс Карт")), MAP_LOAD_TIMEOUT_MS);
+    promise.then(
+      (value) => { window.clearTimeout(timeout); resolve(value); },
+      (error) => { window.clearTimeout(timeout); reject(error); },
+    );
+  });
+}
 
 function currentYMaps(): YMapsRuntime | undefined {
   return (window as Window & { ymaps3?: YMapsRuntime }).ymaps3;
@@ -18,9 +29,9 @@ function currentYMaps(): YMapsRuntime | undefined {
 
 function loadYandexMaps(key: string): Promise<YMapsRuntime> {
   const present = currentYMaps();
-  if (present) return present.ready.then(() => present);
+  if (present) return withTimeout(present.ready.then(() => present));
   if (!apiPromise) {
-    apiPromise = new Promise<YMapsRuntime>((resolve, reject) => {
+    apiPromise = withTimeout(new Promise<YMapsRuntime>((resolve, reject) => {
       const script = document.createElement("script");
       script.src = `https://api-maps.yandex.ru/v3/?apikey=${encodeURIComponent(key)}&lang=ru_RU`;
       script.async = true;
@@ -31,7 +42,7 @@ function loadYandexMaps(key: string): Promise<YMapsRuntime> {
       };
       script.onerror = () => reject(new Error("Не удалось загрузить Яндекс Карты"));
       document.head.appendChild(script);
-    }).catch((error) => { apiPromise = null; throw error; });
+    })).catch((error) => { apiPromise = null; throw error; });
   }
   return apiPromise;
 }

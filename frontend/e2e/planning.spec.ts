@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 
 test("мобильный сценарий доступен от входа до результата и выхода", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -13,6 +14,8 @@ test("мобильный сценарий доступен от входа до 
   const mapConfig = await page.request.get("/api/maps/config");
   if (!(await mapConfig.json()).configured) {
     await expect(page.getByText("Карта ожидает подключения")).toBeVisible();
+  } else {
+    await expect(page.getByText("Открываем карту территории")).toHaveCount(0, { timeout: 16_000 });
   }
   await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 320, height: 720 });
@@ -49,4 +52,33 @@ test("пользовательский JSON загружается, провер
   await expect(page.getByRole("listitem").getByText("Тестовая площадка · Казань")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("listitem").getByText("Тестовая площадка · Казань")).toBeVisible({ timeout: 30_000 });
+});
+
+test("ограничение CVaR видно в результате, а несовместимые условия не выдаются за план", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_DEMO_PASSWORD ?? "demo-local-password");
+  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  const spec = JSON.parse(readFileSync(resolve(__dirname, "../../examples/import_sample.json"), "utf8"));
+  spec.id = "e2e-city-cvar";
+  spec.scenarios = [
+    { id: "base", demand_multiplier: [1], probability: 0.9 },
+    { id: "growth", demand_multiplier: [2], probability: 0.1 },
+  ];
+  spec.parameters.risk = "expected_cvar";
+  spec.parameters.cvar_alpha = 0.9;
+  spec.parameters.max_cvar_unmet_kwh = 0;
+  await page.locator("#scenario-file").setInputFiles({ name: "cvar-test.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(spec)) });
+  await expect(page.locator(".intro-note strong")).toHaveText("cvar-test");
+  await page.getByRole("button", { name: "Рассчитать план" }).click();
+  await expect(page.getByText("Расчёт завершён")).toBeVisible({ timeout: 150_000 });
+  await expect(page.getByText("CVaR · худшие 10% вероятности")).toBeVisible();
+  await expect(page.getByText(/Допустимый предел: 0 кВт·ч/)).toBeVisible();
+
+  spec.id = "e2e-city-cvar-infeasible";
+  spec.grid_nodes[0].headroom_kw = Array(24).fill(0);
+  await page.locator("#scenario-file").setInputFiles({ name: "cvar-impossible.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(spec)) });
+  await expect(page.locator(".intro-note strong")).toHaveText("cvar-impossible");
+  await page.getByRole("button", { name: "Рассчитать план" }).click();
+  await expect(page.getByRole("heading", { name: "Ограничения несовместимы" })).toBeVisible({ timeout: 150_000 });
+  await expect(page.getByText("Расчёт завершён")).toHaveCount(0);
 });

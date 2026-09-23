@@ -35,9 +35,13 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
     served = defaultdict(int)
     refused = defaultdict(int)
     energy = defaultdict(float)
+    partial_energy = defaultdict(float)
     arrivals = defaultdict(int)
+    last_completion = 0.0
+    horizon_minutes = 24 * 60
 
     def vehicle(zone, arrived, requested):
+        nonlocal last_completion
         yield env.timeout(max(0, arrived - env.now))
         arrivals[zone.id] += 1
         h = min(int(env.now // 60), 23)
@@ -62,11 +66,14 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
             return
         _, sid, power, travel_mins = min(eligible)
         yield env.timeout(travel_mins)
+        if env.now >= horizon_minutes:
+            refused[zone.id] += 1
+            return
         station = resources[sid]
         queued_at = env.now
         with station.request() as req:
-            response = yield req | env.timeout(45)
-            if req not in response:
+            response = yield req | env.timeout(min(45, horizon_minutes - env.now))
+            if req not in response or env.now >= horizon_minutes:
                 refused[zone.id] += 1
                 return
             waits.append(env.now - queued_at)
@@ -81,10 +88,15 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                 refused[zone.id] += 1
                 return
             remaining = requested
+            delivered = 0.0
             # Re-evaluate the guaranteed per-port power at hour boundaries.
             # The bound is deliberately conservative: even with every port busy,
             # aggregate draw cannot exceed the node headroom or station contract.
             while remaining > 1e-9:
+                if env.now >= horizon_minutes:
+                    refused[zone.id] += 1
+                    partial_energy[sid] += delivered
+                    return
                 hour = min(int(env.now // 60), 23)
                 headroom = node.headroom_kw[hour] + (node.upgrade_kw if node.id in upgraded_nodes else 0)
                 power = min(option.charger_kw, option.connection_kw / option.ports,
@@ -93,15 +105,19 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                     next_hour = (int(env.now // 60) + 1) * 60
                     if next_hour >= 24 * 60:
                         refused[zone.id] += 1
+                        partial_energy[sid] += delivered
                         return
                     yield env.timeout(next_hour - env.now)
                     continue
                 minutes_to_boundary = (int(env.now // 60) + 1) * 60 - env.now
                 minutes = min(remaining / power * 60, minutes_to_boundary)
                 yield env.timeout(minutes)
-                remaining -= power * minutes / 60
+                portion = power * minutes / 60
+                remaining -= portion
+                delivered += portion
             served[zone.id] += 1
-            energy[sid] += requested
+            energy[sid] += delivered
+            last_completion = max(last_completion, env.now)
 
     for zone in spec.zones:
         for h, hourly_kwh in enumerate(zone.hourly_kwh):
@@ -118,8 +134,11 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
         "refused_sessions": sum(refused.values()),
         "mean_wait_minutes": round(mean(waits), 3) if waits else None,
         "p95_wait_minutes": round(float(np.percentile(waits, 95)), 3) if waits else None,
-        "energy_kwh": round(sum(energy.values()), 3),
+        "energy_kwh": round(sum(energy.values()) + sum(partial_energy.values()), 3),
+        "partial_energy_kwh": round(sum(partial_energy.values()), 3),
+        "last_completion_minute": round(last_completion, 3) if last_completion else None,
         "served_by_zone": dict(served), "refused_by_zone": dict(refused),
-        "energy_by_site_kwh": {k: round(v, 3) for k, v in energy.items()},
-        "assumptions": ["Poisson arrivals", "45-minute patience", "conservative guaranteed charging power", "grid upgrades included", "storage and solar dispatch are not simulated"],
+        "energy_by_site_kwh": {k: round(energy[k] + partial_energy[k], 3)
+                               for k in sorted(energy.keys() | partial_energy.keys())},
+        "assumptions": ["Poisson arrivals", "45-minute patience", "sessions unfinished at the 24-hour horizon are refused", "partial delivered energy is reported", "conservative guaranteed charging power", "grid upgrades included", "storage and solar dispatch are not simulated"],
     }

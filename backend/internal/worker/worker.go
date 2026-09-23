@@ -40,7 +40,7 @@ func (w *Worker) Run(ctx context.Context) error {
 }
 
 func (w *Worker) Process(parent context.Context, job store.Job) {
-	ctx, cancel := context.WithTimeout(parent, 15*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, processingTimeout(job.Spec))
 	defer cancel()
 	heartbeatDone := make(chan struct{})
 	go func() {
@@ -83,6 +83,21 @@ func (w *Worker) Process(parent context.Context, job store.Job) {
 	slog.Info("run completed", "run", job.RunID, "status", code)
 }
 
+func processingTimeout(spec json.RawMessage) time.Duration {
+	var input struct {
+		Parameters struct {
+			SolverSeconds int `json:"solver_seconds"`
+		} `json:"parameters"`
+	}
+	seconds := 60 // Python model default.
+	if json.Unmarshal(spec, &input) == nil && input.Parameters.SolverSeconds >= 1 && input.Parameters.SolverSeconds <= 3600 {
+		seconds = input.Parameters.SolverSeconds
+	}
+	// One primary optimization plus up to three counterfactual re-solves.
+	// The allowance covers simulation, serialization and transient scheduling.
+	return time.Duration(4*seconds)*time.Second + 10*time.Minute
+}
+
 func (w *Worker) calculate(ctx context.Context, spec json.RawMessage) (json.RawMessage, string, string) {
 	payload, err := json.Marshal(struct {
 		Input       json.RawMessage `json:"input"`
@@ -99,7 +114,9 @@ func (w *Worker) calculate(ctx context.Context, spec json.RawMessage) (json.RawM
 	req.Header.Set("Content-Type", "application/json")
 	client := w.Client
 	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Minute}
+		// The per-run context already applies the computation budget. A fixed
+		// client timeout would silently undercut valid solver_seconds values.
+		client = &http.Client{}
 	}
 	response, err := client.Do(req)
 	if err != nil {
@@ -124,8 +141,14 @@ func (w *Worker) calculate(ctx context.Context, spec json.RawMessage) (json.RawM
 	if err := json.Unmarshal(content, &body); err != nil {
 		return nil, "engine_error", err.Error()
 	}
-	if body.Optimization.Status != "optimal" && body.Optimization.Status != "feasible" {
-		return content, "optimization_" + body.Optimization.Status, "no feasible plan produced"
+	switch body.Optimization.Status {
+	case "optimal", "feasible", "infeasible":
+		// Infeasibility is a valid answer to a planning question. Preserve the
+		// solver diagnostic as a result instead of losing it as a worker error.
+		return content, "", ""
+	case "error":
+		return content, "optimization_error", "optimizer did not produce a result"
+	default:
+		return nil, "engine_error", "engine returned an unknown optimization status"
 	}
-	return content, "", ""
 }
