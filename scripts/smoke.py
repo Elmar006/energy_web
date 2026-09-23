@@ -103,6 +103,49 @@ def main() -> None:
     map_config = frontend_call("GET", "/api/maps/config")
     assert isinstance(map_config["configured"], bool)
     assert map_config["configured"] == bool(map_config.get("apiKey"))
+    imported_spec = json.loads((ROOT / "examples" / "import_sample.json").read_text(encoding="utf-8"))
+    broken_spec = json.loads(json.dumps(imported_spec))
+    broken_spec["sites"][0]["grid_node_id"] = "unknown-grid"
+    try:
+        frontend_call("POST", "/api/scenarios", {"name": "broken", "spec": broken_spec})
+        raise AssertionError("invalid planning input was saved")
+    except HTTPError as error:
+        assert error.code == 422, error
+    imported = frontend_call("POST", "/api/scenarios", {"name": "Сценарий из файла · синтетический тест", "spec": imported_spec})
+    assert imported["spec"]["id"] == imported_spec["id"]
+    assert any(item["id"] == imported["id"] for item in frontend_call("GET", "/api/scenarios"))
+    assert frontend_call("GET", f"/api/scenarios/{imported['id']}")["sha256"] == imported["sha256"]
+    imported_run = frontend_call("POST", "/api/runs", {"scenario_id": imported["id"]})
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        imported_state = frontend_call("GET", f"/api/runs/{imported_run['run_id']}")
+        if imported_state["run"]["state"] in ("succeeded", "failed", "cancelled"):
+            break
+        time.sleep(2)
+    else:
+        raise AssertionError("imported scenario did not finish within 180 seconds")
+    assert imported_state["run"]["state"] == "succeeded", imported_state
+    assert imported_state["result"]["optimization"]["selected"][0]["site_id"] == "site-kazan-example"
+    extra_path = os.environ.get("ENERGY_EXTRA_SCENARIO")
+    if extra_path:
+        extra_spec = json.loads(Path(extra_path).read_text(encoding="utf-8"))
+        assert any(dataset["role"] == "routing" and dataset["kind"] == "derived"
+                   for dataset in extra_spec.get("datasets", [])), "extra scenario lacks routed dataset provenance"
+        extra = call("POST", "/api/v1/scenarios", {"name": "smoke-road-network", "spec": extra_spec})
+        stored = call("GET", f"/api/v1/scenarios/{extra['id']}")
+        assert stored["spec"]["travel_edges"] == extra_spec["travel_edges"]
+        extra_run = call("POST", f"/api/v1/scenarios/{extra['id']}/runs", key=str(uuid.uuid4()))
+        deadline = time.monotonic() + 180
+        while time.monotonic() < deadline:
+            extra_state = call("GET", f"/api/v1/runs/{extra_run['id']}")
+            if extra_state["state"] in ("succeeded", "failed", "cancelled"):
+                break
+            time.sleep(2)
+        else:
+            raise AssertionError("road-network scenario did not finish")
+        assert extra_state["state"] == "succeeded", extra_state
+        extra_result = call("GET", f"/api/v1/runs/{extra_run['id']}/results")
+        assert extra_result["optimization"]["selected"], extra_result
     frontend_run = frontend_call("POST", "/api/runs", {"mode": "city", "budget": 10_000_000, "demand": 100})
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
@@ -127,7 +170,8 @@ def main() -> None:
                       "explanations": len(result["explanations"]),
                       "corridor_stops": corridor["stops"],
                       "fleet_peak_kw": fleet["peak_kw"],
-                      "frontend_run": frontend_run["run_id"]}, ensure_ascii=False))
+                      "frontend_run": frontend_run["run_id"],
+                      "imported_run": imported_run["run_id"]}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

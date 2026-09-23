@@ -33,6 +33,15 @@ services:
     ports:
       - "127.0.0.1:8090:8090"
 
+  osrm:
+    profiles: ["routing"]
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: ["osrm-routed", "--algorithm", "mld", "/data/region.osrm"]
+    volumes:
+      - ./data/osrm:/data:ro
+    ports:
+      - "127.0.0.1:5000:5000"
+
   api:
     build: ./backend
     environment:

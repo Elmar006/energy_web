@@ -42,6 +42,9 @@ schemas = {
     "SavedScenario": {"type": "object", "required": ["id", "name", "spec"], "properties": {
         "id": {"type": "string", "format": "uuid"}, "name": {"type": "string"},
         "spec": ref("ScenarioSpec"), "sha256": {"type": "string"}}},
+    "ScenarioSummary": {"type": "object", "required": ["id", "name", "sha256", "created_at"], "properties": {
+        "id": {"type": "string", "format": "uuid"}, "name": {"type": "string"},
+        "sha256": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}}},
     "Run": {"type": "object", "required": ["id", "state"], "properties": {
         "id": {"type": "string", "format": "uuid"}, "scenario_id": {"type": "string", "format": "uuid"},
         "state": {"type": "string", "enum": ["queued", "running", "succeeded", "failed", "cancelled"]},
@@ -75,8 +78,11 @@ document = {
     "paths": {
         "/healthz": {"get": {"security": [], "summary": "Process health", "responses": {"200": response({"type": "object"})}}},
         "/readyz": {"get": {"security": [], "summary": "Database readiness", "responses": {"200": response({"type": "object"})}}},
-        "/api/v1/scenarios": {"post": {"summary": "Create immutable scenario", "requestBody": body(spec_create),
-            "responses": {"201": response(ref("SavedScenario")), **error_responses}}},
+        "/api/v1/scenarios": {
+            "get": {"summary": "List saved scenario snapshots", "responses": {
+                "200": response({"type": "array", "items": ref("ScenarioSummary")}), **error_responses}},
+            "post": {"summary": "Validate and create immutable scenario", "requestBody": body(spec_create),
+                "responses": {"201": response(ref("SavedScenario")), **error_responses}}},
         "/api/v1/scenarios/{id}": {"get": {"summary": "Get scenario", "parameters": [uuid_param],
             "responses": {"200": response(ref("SavedScenario")), "404": response(ref("Error")), **error_responses}}},
         "/api/v1/scenarios/{id}/runs": {"post": {"summary": "Queue idempotent calculation",

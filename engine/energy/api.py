@@ -29,6 +29,13 @@ def health():
     return {"status": "ok"}
 
 
+@app.post("/v1/validate")
+def validate_input(planning_input: PlanningInput):
+    return {"valid": True, "id": planning_input.id,
+            "zones": len(planning_input.zones), "sites": len(planning_input.sites),
+            "grid_nodes": len(planning_input.grid_nodes)}
+
+
 @app.post("/v1/corridor/check")
 def corridor_check(request: CorridorInput):
     return check_corridor(request)

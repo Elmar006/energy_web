@@ -22,6 +22,13 @@ type Scenario struct {
 	SHA256 string          `json:"sha256"`
 }
 
+type ScenarioSummary struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	SHA256    string    `json:"sha256"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Run struct {
 	ID          string    `json:"id"`
 	ScenarioID  string    `json:"scenario_id"`
@@ -82,6 +89,23 @@ func (s *Store) GetScenario(ctx context.Context, id string) (Scenario, error) {
 		return out, ErrNotFound
 	}
 	return out, err
+}
+
+func (s *Store) ListScenarios(ctx context.Context) ([]ScenarioSummary, error) {
+	rows, err := s.DB.Query(ctx, `SELECT id::text,name,spec_sha256,created_at FROM scenarios ORDER BY created_at DESC LIMIT 100`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ScenarioSummary{}
+	for rows.Next() {
+		var item ScenarioSummary
+		if err := rows.Scan(&item.ID, &item.Name, &item.SHA256, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) CreateRun(ctx context.Context, scenarioID, key string) (Run, error) {

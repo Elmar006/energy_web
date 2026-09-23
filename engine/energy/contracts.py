@@ -10,6 +10,16 @@ class Provenance(BaseModel):
     captured_at: str | None = None
 
 
+class DatasetReference(BaseModel):
+    name: str = Field(min_length=1)
+    role: Literal["demand_sessions", "candidate_sites", "grid", "tariff", "routing", "other"]
+    kind: Literal["observed", "derived", "assumed"]
+    source: str = Field(min_length=1)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    license: str | None = None
+    captured_at: str | None = None
+
+
 class Zone(BaseModel):
     id: str
     name: str
@@ -128,6 +138,7 @@ class PlanningInput(BaseModel):
     scenarios: list[Scenario]
     travel_edges: list[TravelEdge]
     parameters: Parameters
+    datasets: list[DatasetReference] = Field(default_factory=list)
     locked_site_ids: list[str] = Field(default_factory=list)
     excluded_site_ids: list[str] = Field(default_factory=list)
 

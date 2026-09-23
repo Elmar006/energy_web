@@ -1,11 +1,36 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestScenarioValidationRejectsBrokenPlanningInputBeforeDatabase(t *testing.T) {
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/validate" || r.Method != http.MethodPost {
+			t.Errorf("unexpected validation request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"detail":[{"loc":["body","sites",0,"grid_node_id"],"msg":"unknown node"}]}`))
+	}))
+	defer engine.Close()
+	handler := (Server{Token: "test-secret-token", EngineURL: engine.URL}).Handler()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/scenarios", strings.NewReader(`{"name":"broken","spec":{"sites":[]}}`))
+	request.Header.Set("Authorization", "Bearer test-secret-token")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unexpected status: %d %s", response.Code, response.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || !strings.Contains(body["detail"], "sites.0.grid_node_id") {
+		t.Fatalf("missing field detail: %s, error: %v", response.Body.String(), err)
+	}
+}
 
 func TestAuthAndRequestValidation(t *testing.T) {
 	handler := (Server{Token: "test-secret-token"}).Handler()

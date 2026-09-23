@@ -79,6 +79,79 @@
         "title": "ChargerOption",
         "type": "object"
       },
+      "DatasetReference": {
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "demand_sessions",
+              "candidate_sites",
+              "grid",
+              "tariff",
+              "routing",
+              "other"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "observed",
+              "derived",
+              "assumed"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "License"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Captured At"
+          }
+        },
+        "required": [
+          "name",
+          "role",
+          "kind",
+          "source",
+          "sha256"
+        ],
+        "title": "DatasetReference",
+        "type": "object"
+      },
       "GridNode": {
         "properties": {
           "id": {
@@ -718,6 +791,13 @@
           "parameters": {
             "$ref": "#/components/schemas/Parameters"
           },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetReference"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
           "locked_site_ids": {
             "items": {
               "type": "string"
@@ -908,6 +988,31 @@
           }
         }
       },
+      "ScenarioSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "sha256",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "Run": {
         "type": "object",
         "required": [
@@ -1058,8 +1163,46 @@
       }
     },
     "/api/v1/scenarios": {
+      "get": {
+        "summary": "List saved scenario snapshots",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScenarioSummary"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
-        "summary": "Create immutable scenario",
+        "summary": "Validate and create immutable scenario",
         "requestBody": {
           "required": true,
           "content": {

@@ -78,6 +78,25 @@ func TestRunLifecycle(t *testing.T) {
 	}
 }
 
+func TestListScenariosIncludesSavedSnapshot(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	saved, err := s.CreateScenario(ctx, "listed-snapshot", json.RawMessage(`{"id":"listed"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := s.ListScenarios(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.ID == saved.ID && item.Name == saved.Name && item.SHA256 == saved.SHA256 {
+			return
+		}
+	}
+	t.Fatal("saved scenario not found in listing")
+}
+
 func TestCancellationRejectsFinish(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

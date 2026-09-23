@@ -1,0 +1,50 @@
+{
+  "id": "synthetic-kazan-import-example",
+  "zones": [
+    {
+      "id": "zone-kazan-example",
+      "name": "Тестовая зона спроса",
+      "latitude": 55.7961,
+      "longitude": 49.1064,
+      "group": "private",
+      "hourly_kwh": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "mean_session_kwh": 10,
+      "max_travel_minutes": 20,
+      "provenance": {"kind": "assumed", "source": "Синтетический пример формата; не наблюдение города"}
+    }
+  ],
+  "sites": [
+    {
+      "id": "site-kazan-example",
+      "name": "Тестовая площадка · Казань",
+      "latitude": 55.7980,
+      "longitude": 49.1130,
+      "grid_node_id": "grid-kazan-example",
+      "option_ids": ["dc-example"],
+      "provenance": {"kind": "assumed", "source": "Синтетический пример формата; площадка не обследована"}
+    }
+  ],
+  "options": [
+    {"id": "dc-example", "ports": 1, "charger_kw": 20, "connection_kw": 20, "capex_rub": 1000, "annual_fixed_rub": 0, "allowed_groups": ["private"]}
+  ],
+  "grid_nodes": [
+    {
+      "id": "grid-kazan-example",
+      "headroom_kw": [20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20],
+      "provenance": {"kind": "assumed", "source": "Синтетический пример; не подтверждено сетевой организацией"}
+    }
+  ],
+  "scenarios": [{"id": "base", "demand_multiplier": [1]}],
+  "travel_edges": [{"zone_id": "zone-kazan-example", "site_id": "site-kazan-example", "minutes": 5}],
+  "parameters": {
+    "mode": "city",
+    "years": [2027],
+    "annual_budgets_rub": [5000],
+    "total_budget_rub": 5000,
+    "sale_rub_per_kwh": 20,
+    "purchase_rub_per_kwh": 5,
+    "discount_rate": 0.1,
+    "pv_hourly_factor": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "solver_seconds": 15
+  }
+}

@@ -3,13 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, MapPin, Plus, Minus } from "lucide-react";
 import type {} from "@yandex/ymaps3-types";
-import { demoSites, demoZones } from "@/lib/demo";
+import type { MapSite, MapZone } from "@/lib/planning";
 
 type Selection = { site_id: string; option_id: string; year: number };
 type MapStatus = "loading" | "ready" | "missing-key" | "error";
 type Point = { id: string; name: string; kind: "site" | "demand"; subtitle: string };
 
-const center: [number, number] = [60.606, 56.829];
 type YMapsRuntime = typeof import("@yandex/ymaps3-types");
 let apiPromise: Promise<YMapsRuntime> | null = null;
 
@@ -37,12 +36,18 @@ function loadYandexMaps(key: string): Promise<YMapsRuntime> {
   return apiPromise;
 }
 
-export default function PlanningMap({ selected }: { selected?: Selection[] }) {
+export default function PlanningMap({ selected, sites, zones }: { selected?: Selection[]; sites: MapSite[]; zones: MapZone[] }) {
   const holder = useRef<HTMLDivElement>(null);
   const mapRef = useRef<InstanceType<typeof ymaps3.YMap> | null>(null);
   const [status, setStatus] = useState<MapStatus>("loading");
   const [active, setActive] = useState<Point | null>(null);
   const bySite = useMemo(() => new Map((selected ?? []).map((item) => [item.site_id, item])), [selected]);
+  const center = useMemo<[number, number]>(() => {
+    const points = [...sites, ...zones];
+    if (!points.length) return [60.606, 56.829];
+    return [points.reduce((sum, point) => sum + point.longitude, 0) / points.length,
+      points.reduce((sum, point) => sum + point.latitude, 0) / points.length];
+  }, [sites, zones]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +68,7 @@ export default function PlanningMap({ selected }: { selected?: Selection[] }) {
           { tags: { all: ["landscape"] }, elements: "geometry", stylers: [{ saturation: -1 }] },
         ] }));
         map.addChild(new api.YMapDefaultFeaturesLayer({ zIndex: 1800 }));
-        for (const zone of demoZones) {
+        for (const zone of zones) {
           const marker = document.createElement("button");
           marker.type = "button";
           marker.className = "map-point demand";
@@ -72,7 +77,7 @@ export default function PlanningMap({ selected }: { selected?: Selection[] }) {
           marker.onclick = () => setActive({ id: zone.id, name: zone.name, kind: "demand", subtitle: "Зона спроса · сценарные данные" });
           map.addChild(new api.YMapMarker({ coordinates: [zone.longitude, zone.latitude] }, marker));
         }
-        for (const site of demoSites) {
+        for (const site of sites) {
           const selection = bySite.get(site.id);
           const marker = document.createElement("button");
           marker.type = "button";
@@ -91,14 +96,14 @@ export default function PlanningMap({ selected }: { selected?: Selection[] }) {
     }
     void initialize();
     return () => { cancelled = true; map?.destroy(); if (mapRef.current === map) mapRef.current = null; };
-  }, [bySite]);
+  }, [bySite, center, sites, zones]);
 
   function zoom(direction: 1 | -1) {
     if (!mapRef.current) return;
     mapRef.current.update({ location: { zoom: Math.min(18, Math.max(3, mapRef.current.zoom + direction)) } });
   }
 
-  return <div className="map-frame" role="group" aria-label="Карта пилотной территории">
+  return <div className="map-frame" role="group" aria-label="Карта территории сценария">
     <div ref={holder} className="map-canvas" aria-hidden={status !== "ready"} />
     {status === "loading" && <div className="map-state"><div className="map-state-icon"><MapPin size={22} /></div><strong>Открываем карту территории</strong><span>Подключаем картографический слой</span></div>}
     {status === "missing-key" && <div className="map-state"><div className="map-state-icon"><MapPin size={22} /></div><strong>Карта ожидает подключения</strong><span>Добавьте ключ JavaScript API Яндекс Карт в настройки развёртывания.</span><a href="https://yandex.ru/maps-api/docs/js-api/common/quickstart.html" target="_blank" rel="noreferrer">Как получить ключ <ArrowUpRight size={15} /></a></div>}

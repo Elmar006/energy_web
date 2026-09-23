@@ -1,0 +1,3 @@
+session_id,zone_id,started_at,ended_at,energy_kwh
+synthetic-session-1,zone-kazan-example,2027-04-01T09:30:00+00:00,2027-04-01T10:30:00+00:00,12
+synthetic-session-2,zone-kazan-example,2027-04-01T14:00:00+00:00,2027-04-01T15:00:00+00:00,8

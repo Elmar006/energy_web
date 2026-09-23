@@ -1,0 +1,69 @@
+from datetime import date
+
+import pytest
+
+from energy.ingest_sessions import derive_demand
+
+
+def test_metered_energy_is_conserved_across_local_hours(small_input):
+    sessions = ("session_id,zone_id,started_at,ended_at,energy_kwh\n"
+                "one,z1,2027-04-01T12:30:00+00:00,2027-04-01T13:30:00+00:00,10\n").encode()
+    result = derive_demand(small_input, sessions, source="operator export", time_zone="Europe/Moscow",
+                           start_date=date(2027, 4, 1), end_date=date(2027, 4, 1))
+    assert result.zones[0].hourly_kwh[15] == pytest.approx(5)
+    assert result.zones[0].hourly_kwh[16] == pytest.approx(5)
+    assert sum(result.zones[0].hourly_kwh) == pytest.approx(10)
+    assert result.zones[0].provenance.kind == "derived"
+    assert result.datasets[0].sha256
+    assert result.datasets[0].kind == "assumed"
+    assert small_input.zones[0].hourly_kwh[15] == 0
+
+
+def test_midnight_session_is_normalized_by_explicit_day_count(small_input):
+    sessions = ("session_id,zone_id,started_at,ended_at,energy_kwh\n"
+                "one,z1,2027-04-01T20:30:00+00:00,2027-04-01T21:30:00+00:00,10\n").encode()
+    result = derive_demand(small_input, sessions, source="operator export", time_zone="Europe/Moscow",
+                           start_date=date(2027, 4, 1), end_date=date(2027, 4, 2))
+    assert result.zones[0].hourly_kwh[23] == pytest.approx(2.5)
+    assert result.zones[0].hourly_kwh[0] == pytest.approx(2.5)
+    assert sum(result.zones[0].hourly_kwh) == pytest.approx(5)
+
+
+@pytest.mark.parametrize("rows,reason", [
+    ("", "no sessions"),
+    ("one,unknown,2027-04-01T12:00:00+00:00,2027-04-01T13:00:00+00:00,10\n", "unknown zone_id"),
+    ("one,z1,2027-04-01T12:00:00,2027-04-01T13:00:00,10\n", "UTC offset"),
+    ("one,z1,2027-04-01T12:00:00+00:00,2027-04-01T13:00:00+00:00,-1\n", "positive"),
+])
+def test_invalid_or_missing_observations_are_not_silently_zeroed(small_input, rows, reason):
+    csv_data = ("session_id,zone_id,started_at,ended_at,energy_kwh\n" + rows).encode()
+    with pytest.raises(ValueError, match=reason):
+        derive_demand(small_input, csv_data, source="operator export", time_zone="Europe/Moscow",
+                      start_date=date(2027, 4, 1), end_date=date(2027, 4, 1))
+
+
+def test_duplicate_session_ids_are_rejected(small_input):
+    row = "one,z1,2027-04-01T12:00:00+00:00,2027-04-01T13:00:00+00:00,10\n"
+    csv_data = ("session_id,zone_id,started_at,ended_at,energy_kwh\n" + row + row).encode()
+    with pytest.raises(ValueError, match="duplicate"):
+        derive_demand(small_input, csv_data, source="operator export", time_zone="Europe/Moscow",
+                      start_date=date(2027, 4, 1), end_date=date(2027, 4, 1))
+
+
+def test_repeated_dst_hour_conserves_energy(small_input):
+    csv_data = ("session_id,zone_id,started_at,ended_at,energy_kwh\n"
+                "one,z1,2027-10-31T00:30:00+00:00,2027-10-31T02:30:00+00:00,20\n").encode()
+    result = derive_demand(small_input, csv_data, source="operator export", time_zone="Europe/Berlin",
+                           start_date=date(2027, 10, 31), end_date=date(2027, 10, 31))
+    assert result.zones[0].hourly_kwh[2] == pytest.approx(15)
+    assert result.zones[0].hourly_kwh[3] == pytest.approx(5)
+    assert sum(result.zones[0].hourly_kwh) == pytest.approx(20)
+
+
+def test_operator_export_can_be_marked_observed(small_input):
+    data = ("session_id,zone_id,started_at,ended_at,energy_kwh\n"
+            "one,z1,2027-04-01T12:00:00+00:00,2027-04-01T13:00:00+00:00,10\n").encode()
+    result = derive_demand(small_input, data, source="verified operator export", kind="observed",
+                           time_zone="Europe/Moscow", start_date=date(2027, 4, 1), end_date=date(2027, 4, 1))
+    assert result.datasets[0].kind == "observed"
+    assert "input_kind=observed" in result.zones[0].provenance.source

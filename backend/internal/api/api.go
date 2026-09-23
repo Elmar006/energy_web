@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -43,6 +44,7 @@ func (s Server) Handler() http.Handler {
 		writeJSON(w, 200, map[string]string{"status": "ready"})
 	})
 	mux.HandleFunc("POST /api/v1/scenarios", s.createScenario)
+	mux.HandleFunc("GET /api/v1/scenarios", s.listScenarios)
 	mux.HandleFunc("GET /api/v1/scenarios/{id}", s.getScenario)
 	mux.HandleFunc("POST /api/v1/scenarios/{id}/runs", s.createRun)
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.getRun)
@@ -88,12 +90,61 @@ func (s Server) createScenario(w http.ResponseWriter, r *http.Request) {
 		fail(w, 422, "invalid_scenario", "name and JSON spec are required")
 		return
 	}
+	if s.EngineURL == "" {
+		fail(w, 503, "engine_unavailable", "input validator is not configured")
+		return
+	}
+	validationRequest, err := http.NewRequestWithContext(r.Context(), http.MethodPost,
+		strings.TrimRight(s.EngineURL, "/")+"/v1/validate", bytes.NewReader(in.Spec))
+	if err != nil {
+		fail(w, 500, "validation_error", "unable to prepare input validation")
+		return
+	}
+	validationRequest.Header.Set("Content-Type", "application/json")
+	validationResponse, err := (&http.Client{Timeout: 15 * time.Second}).Do(validationRequest)
+	if err != nil {
+		fail(w, 503, "engine_unavailable", "input validator is unavailable")
+		return
+	}
+	defer validationResponse.Body.Close()
+	if validationResponse.StatusCode == http.StatusUnprocessableEntity {
+		var validation struct {
+			Detail []struct {
+				Loc []any  `json:"loc"`
+				Msg string `json:"msg"`
+			} `json:"detail"`
+		}
+		_ = json.NewDecoder(io.LimitReader(validationResponse.Body, 1<<16)).Decode(&validation)
+		detail := "scenario does not match the planning input contract"
+		if len(validation.Detail) > 0 {
+			parts := make([]string, 0, len(validation.Detail[0].Loc))
+			for _, part := range validation.Detail[0].Loc {
+				parts = append(parts, fmt.Sprint(part))
+			}
+			detail = strings.Join(parts, ".") + ": " + validation.Detail[0].Msg
+		}
+		fail(w, 422, "invalid_scenario", detail)
+		return
+	}
+	if validationResponse.StatusCode != http.StatusOK {
+		fail(w, 503, "validation_error", "input validator failed")
+		return
+	}
 	saved, err := s.Store.CreateScenario(r.Context(), in.Name, in.Spec)
 	if err != nil {
 		fail(w, 500, "database_error", "unable to create scenario")
 		return
 	}
 	writeJSON(w, 201, saved)
+}
+
+func (s Server) listScenarios(w http.ResponseWriter, r *http.Request) {
+	items, err := s.Store.ListScenarios(r.Context())
+	if err != nil {
+		fail(w, 500, "database_error", "unable to list scenarios")
+		return
+	}
+	writeJSON(w, 200, items)
 }
 
 func (s Server) getScenario(w http.ResponseWriter, r *http.Request) {

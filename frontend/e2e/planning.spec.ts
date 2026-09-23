@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { resolve } from "node:path";
 
 test("мобильный сценарий доступен от входа до результата и выхода", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -8,8 +9,9 @@ test("мобильный сценарий доступен от входа до 
   await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
   await expect(page.getByRole("heading", { name: "Развитие зарядной сети" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Выйти из рабочего пространства" })).toBeVisible();
-  await expect(page.getByRole("group", { name: "Карта пилотной территории" })).toBeVisible();
-  if (!process.env.YANDEX_MAPS_API_KEY) {
+  await expect(page.getByRole("group", { name: "Карта территории сценария" })).toBeVisible();
+  const mapConfig = await page.request.get("/api/maps/config");
+  if (!(await mapConfig.json()).configured) {
     await expect(page.getByText("Карта ожидает подключения")).toBeVisible();
   }
   await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -32,4 +34,19 @@ test("мобильный сценарий доступен от входа до 
 
   await page.getByRole("button", { name: "Выйти из рабочего пространства" }).click();
   await expect(page.getByRole("textbox", { name: "Пароль доступа" })).toBeVisible();
+});
+
+test("пользовательский JSON загружается, проверяется и рассчитывается", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_DEMO_PASSWORD ?? "demo-local-password");
+  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/import_sample.json"));
+  await expect(page.locator(".intro-note strong")).toHaveText("import_sample");
+  await expect(page.getByText(/3 предположенных записей/)).toBeVisible();
+  await expect(page.getByText("1 кандидат")).toBeVisible();
+  await page.getByRole("button", { name: "Рассчитать план" }).click();
+  await expect(page.getByText("Расчёт завершён")).toBeVisible({ timeout: 150_000 });
+  await expect(page.getByRole("listitem").getByText("Тестовая площадка · Казань")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("listitem").getByText("Тестовая площадка · Казань")).toBeVisible({ timeout: 30_000 });
 });
