@@ -1,0 +1,12 @@
+.env
+.env.local
+.venv/
+__pycache__/
+.pytest_cache/
+node_modules/
+.next/
+*.pyc
+coverage.out
+.gotmp/
+test-results/
+playwright-report/

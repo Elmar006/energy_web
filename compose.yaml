@@ -1,0 +1,74 @@
+services:
+  db:
+    image: postgis/postgis:18-3.6-alpine
+    environment:
+      POSTGRES_DB: energy
+      POSTGRES_USER: energy
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-energy_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./backend/migrations/001_init.sql:/docker-entrypoint-initdb.d/20-energy.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U energy -d energy"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "127.0.0.1:55432:5432"
+
+  redis:
+    image: redis:8.10.0-alpine
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  engine:
+    build: ./engine
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8090/healthz')"]
+      interval: 10s
+      retries: 10
+    ports:
+      - "127.0.0.1:8090:8090"
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:-energy_dev}@db:5432/energy?sslmode=disable
+      API_TOKEN: ${API_TOKEN:-local-development-token-change-before-deploy}
+      API_ADDR: :8080
+      REDIS_ADDR: redis:6379
+      ENGINE_URL: http://engine:8090
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      engine: {condition: service_healthy}
+    ports:
+      - "127.0.0.1:58080:8080"
+
+  worker:
+    build: ./backend
+    entrypoint: ["/worker"]
+    environment:
+      DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:-energy_dev}@db:5432/energy?sslmode=disable
+      ENGINE_URL: http://engine:8090
+    depends_on:
+      db: {condition: service_healthy}
+      engine: {condition: service_healthy}
+
+  frontend:
+    build: ./frontend
+    environment:
+      ENERGY_API_URL: http://api:8080
+      API_TOKEN: ${API_TOKEN:-local-development-token-change-before-deploy}
+      APP_DEMO_PASSWORD: ${APP_DEMO_PASSWORD:-demo-local-password}
+      YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY:-}
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:53001:3000"
+
+volumes:
+  postgres_data:

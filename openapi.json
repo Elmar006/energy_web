@@ -1,0 +1,1740 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Вектор — planning API",
+    "version": "1.0.0",
+    "description": "Public scenario, run and geography API. Engine coordinates and money are explicit in ScenarioSpec."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:58080"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "ChargerOption": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ports": {
+            "exclusiveMinimum": 0,
+            "title": "Ports",
+            "type": "integer"
+          },
+          "charger_kw": {
+            "exclusiveMinimum": 0,
+            "title": "Charger Kw",
+            "type": "number"
+          },
+          "connection_kw": {
+            "exclusiveMinimum": 0,
+            "title": "Connection Kw",
+            "type": "number"
+          },
+          "capex_rub": {
+            "minimum": 0,
+            "title": "Capex Rub",
+            "type": "number"
+          },
+          "annual_fixed_rub": {
+            "minimum": 0,
+            "title": "Annual Fixed Rub",
+            "type": "number"
+          },
+          "allowed_groups": {
+            "items": {
+              "enum": [
+                "private",
+                "taxi",
+                "fleet",
+                "corridor"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "ports",
+          "charger_kw",
+          "connection_kw",
+          "capex_rub",
+          "annual_fixed_rub"
+        ],
+        "title": "ChargerOption",
+        "type": "object"
+      },
+      "GridNode": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "headroom_kw": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Headroom Kw",
+            "type": "array"
+          },
+          "upgrade_kw": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Upgrade Kw",
+            "type": "number"
+          },
+          "upgrade_capex_rub": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Upgrade Capex Rub",
+            "type": "number"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          }
+        },
+        "required": [
+          "id",
+          "headroom_kw",
+          "provenance"
+        ],
+        "title": "GridNode",
+        "type": "object"
+      },
+      "Parameters": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "operator",
+              "city"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "risk": {
+            "default": "worst_case",
+            "enum": [
+              "worst_case",
+              "expected"
+            ],
+            "title": "Risk",
+            "type": "string"
+          },
+          "years": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Years",
+            "type": "array"
+          },
+          "annual_budgets_rub": {
+            "items": {
+              "type": "number"
+            },
+            "minItems": 1,
+            "title": "Annual Budgets Rub",
+            "type": "array"
+          },
+          "total_budget_rub": {
+            "minimum": 0,
+            "title": "Total Budget Rub",
+            "type": "number"
+          },
+          "sale_rub_per_kwh": {
+            "minimum": 0,
+            "title": "Sale Rub Per Kwh",
+            "type": "number"
+          },
+          "purchase_rub_per_kwh": {
+            "minimum": 0,
+            "title": "Purchase Rub Per Kwh",
+            "type": "number"
+          },
+          "discount_rate": {
+            "exclusiveMaximum": 1,
+            "minimum": 0,
+            "title": "Discount Rate",
+            "type": "number"
+          },
+          "pv_hourly_factor": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Pv Hourly Factor",
+            "type": "array"
+          },
+          "storage_efficiency": {
+            "default": 0.9,
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "title": "Storage Efficiency",
+            "type": "number"
+          },
+          "storage_max_hours": {
+            "default": 2,
+            "exclusiveMinimum": 0,
+            "title": "Storage Max Hours",
+            "type": "number"
+          },
+          "storage_degradation_rub_per_kwh": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Storage Degradation Rub Per Kwh",
+            "type": "number"
+          },
+          "minimum_zone_service": {
+            "default": 0,
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Minimum Zone Service",
+            "type": "number"
+          },
+          "solver_seconds": {
+            "default": 60,
+            "maximum": 3600,
+            "minimum": 1,
+            "title": "Solver Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "years",
+          "annual_budgets_rub",
+          "total_budget_rub",
+          "sale_rub_per_kwh",
+          "purchase_rub_per_kwh",
+          "discount_rate",
+          "pv_hourly_factor"
+        ],
+        "title": "Parameters",
+        "type": "object"
+      },
+      "Provenance": {
+        "properties": {
+          "source": {
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "observed",
+              "derived",
+              "assumed"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Captured At"
+          }
+        },
+        "required": [
+          "source",
+          "kind"
+        ],
+        "title": "Provenance",
+        "type": "object"
+      },
+      "Scenario": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "demand_multiplier": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Demand Multiplier",
+            "type": "array"
+          },
+          "tariff_multiplier": {
+            "default": 1,
+            "exclusiveMinimum": 0,
+            "title": "Tariff Multiplier",
+            "type": "number"
+          },
+          "pv_multiplier": {
+            "default": 1,
+            "minimum": 0,
+            "title": "Pv Multiplier",
+            "type": "number"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Probability"
+          }
+        },
+        "required": [
+          "id",
+          "demand_multiplier"
+        ],
+        "title": "Scenario",
+        "type": "object"
+      },
+      "Site": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "latitude": {
+            "maximum": 90,
+            "minimum": -90,
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "maximum": 180,
+            "minimum": -180,
+            "title": "Longitude",
+            "type": "number"
+          },
+          "grid_node_id": {
+            "title": "Grid Node Id",
+            "type": "string"
+          },
+          "option_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Option Ids",
+            "type": "array"
+          },
+          "existing_option_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Existing Option Id"
+          },
+          "earliest_period": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Earliest Period",
+            "type": "integer"
+          },
+          "battery_max_kwh": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Battery Max Kwh",
+            "type": "number"
+          },
+          "battery_capex_per_kwh_rub": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Battery Capex Per Kwh Rub",
+            "type": "number"
+          },
+          "pv_max_kw": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Pv Max Kw",
+            "type": "number"
+          },
+          "pv_capex_per_kw_rub": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Pv Capex Per Kw Rub",
+            "type": "number"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "latitude",
+          "longitude",
+          "grid_node_id",
+          "option_ids",
+          "provenance"
+        ],
+        "title": "Site",
+        "type": "object"
+      },
+      "TravelEdge": {
+        "properties": {
+          "zone_id": {
+            "title": "Zone Id",
+            "type": "string"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          },
+          "minutes": {
+            "minimum": 0,
+            "title": "Minutes",
+            "type": "number"
+          }
+        },
+        "required": [
+          "zone_id",
+          "site_id",
+          "minutes"
+        ],
+        "title": "TravelEdge",
+        "type": "object"
+      },
+      "Zone": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "latitude": {
+            "maximum": 90,
+            "minimum": -90,
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "maximum": 180,
+            "minimum": -180,
+            "title": "Longitude",
+            "type": "number"
+          },
+          "group": {
+            "default": "private",
+            "enum": [
+              "private",
+              "taxi",
+              "fleet",
+              "corridor"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "hourly_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Hourly Kwh",
+            "type": "array"
+          },
+          "mean_session_kwh": {
+            "exclusiveMinimum": 0,
+            "title": "Mean Session Kwh",
+            "type": "number"
+          },
+          "max_travel_minutes": {
+            "exclusiveMinimum": 0,
+            "title": "Max Travel Minutes",
+            "type": "number"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "latitude",
+          "longitude",
+          "hourly_kwh",
+          "mean_session_kwh",
+          "max_travel_minutes",
+          "provenance"
+        ],
+        "title": "Zone",
+        "type": "object"
+      },
+      "CorridorStation": {
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "km": {
+            "exclusiveMinimum": 0,
+            "title": "Km",
+            "type": "number"
+          },
+          "available": {
+            "default": true,
+            "title": "Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "km"
+        ],
+        "title": "CorridorStation",
+        "type": "object"
+      },
+      "ChargeWindow": {
+        "properties": {
+          "bus_id": {
+            "title": "Bus Id",
+            "type": "string"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          },
+          "start_slot": {
+            "minimum": 0,
+            "title": "Start Slot",
+            "type": "integer"
+          },
+          "end_slot": {
+            "exclusiveMinimum": 0,
+            "title": "End Slot",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bus_id",
+          "site_id",
+          "start_slot",
+          "end_slot"
+        ],
+        "title": "ChargeWindow",
+        "type": "object"
+      },
+      "FleetBus": {
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "battery_kwh": {
+            "exclusiveMinimum": 0,
+            "title": "Battery Kwh",
+            "type": "number"
+          },
+          "initial_kwh": {
+            "minimum": 0,
+            "title": "Initial Kwh",
+            "type": "number"
+          },
+          "minimum_kwh": {
+            "minimum": 0,
+            "title": "Minimum Kwh",
+            "type": "number"
+          },
+          "end_target_kwh": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End Target Kwh"
+          }
+        },
+        "required": [
+          "id",
+          "battery_kwh",
+          "initial_kwh",
+          "minimum_kwh"
+        ],
+        "title": "FleetBus",
+        "type": "object"
+      },
+      "FleetSite": {
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "ports": {
+            "exclusiveMinimum": 0,
+            "title": "Ports",
+            "type": "integer"
+          },
+          "charger_kw": {
+            "exclusiveMinimum": 0,
+            "title": "Charger Kw",
+            "type": "number"
+          },
+          "grid_kw": {
+            "exclusiveMinimum": 0,
+            "title": "Grid Kw",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "ports",
+          "charger_kw",
+          "grid_kw"
+        ],
+        "title": "FleetSite",
+        "type": "object"
+      },
+      "FleetTrip": {
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "bus_id": {
+            "title": "Bus Id",
+            "type": "string"
+          },
+          "start_slot": {
+            "minimum": 0,
+            "title": "Start Slot",
+            "type": "integer"
+          },
+          "end_slot": {
+            "exclusiveMinimum": 0,
+            "title": "End Slot",
+            "type": "integer"
+          },
+          "energy_kwh": {
+            "exclusiveMinimum": 0,
+            "title": "Energy Kwh",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "bus_id",
+          "start_slot",
+          "end_slot",
+          "energy_kwh"
+        ],
+        "title": "FleetTrip",
+        "type": "object"
+      },
+      "ScenarioSpec": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "zones": {
+            "items": {
+              "$ref": "#/components/schemas/Zone"
+            },
+            "title": "Zones",
+            "type": "array"
+          },
+          "sites": {
+            "items": {
+              "$ref": "#/components/schemas/Site"
+            },
+            "title": "Sites",
+            "type": "array"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ChargerOption"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "grid_nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GridNode"
+            },
+            "title": "Grid Nodes",
+            "type": "array"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/Scenario"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          },
+          "travel_edges": {
+            "items": {
+              "$ref": "#/components/schemas/TravelEdge"
+            },
+            "title": "Travel Edges",
+            "type": "array"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/Parameters"
+          },
+          "locked_site_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Locked Site Ids",
+            "type": "array"
+          },
+          "excluded_site_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Site Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "zones",
+          "sites",
+          "options",
+          "grid_nodes",
+          "scenarios",
+          "travel_edges",
+          "parameters"
+        ],
+        "title": "PlanningInput",
+        "type": "object"
+      },
+      "CorridorSpec": {
+        "properties": {
+          "route_km": {
+            "exclusiveMinimum": 0,
+            "title": "Route Km",
+            "type": "number"
+          },
+          "battery_usable_kwh": {
+            "exclusiveMinimum": 0,
+            "title": "Battery Usable Kwh",
+            "type": "number"
+          },
+          "initial_soc": {
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "title": "Initial Soc",
+            "type": "number"
+          },
+          "reserve_soc": {
+            "exclusiveMaximum": 1,
+            "minimum": 0,
+            "title": "Reserve Soc",
+            "type": "number"
+          },
+          "consumption_kwh_per_km": {
+            "exclusiveMinimum": 0,
+            "title": "Consumption Kwh Per Km",
+            "type": "number"
+          },
+          "consumption_multiplier": {
+            "default": 1,
+            "exclusiveMinimum": 0,
+            "title": "Consumption Multiplier",
+            "type": "number"
+          },
+          "stations": {
+            "items": {
+              "$ref": "#/components/schemas/CorridorStation"
+            },
+            "title": "Stations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "route_km",
+          "battery_usable_kwh",
+          "initial_soc",
+          "reserve_soc",
+          "consumption_kwh_per_km",
+          "stations"
+        ],
+        "title": "CorridorInput",
+        "type": "object"
+      },
+      "FleetSpec": {
+        "properties": {
+          "slot_minutes": {
+            "default": 15,
+            "exclusiveMinimum": 0,
+            "maximum": 60,
+            "title": "Slot Minutes",
+            "type": "integer"
+          },
+          "horizon_slots": {
+            "exclusiveMinimum": 0,
+            "maximum": 192,
+            "title": "Horizon Slots",
+            "type": "integer"
+          },
+          "efficiency": {
+            "default": 0.95,
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "title": "Efficiency",
+            "type": "number"
+          },
+          "buses": {
+            "items": {
+              "$ref": "#/components/schemas/FleetBus"
+            },
+            "minItems": 1,
+            "title": "Buses",
+            "type": "array"
+          },
+          "sites": {
+            "items": {
+              "$ref": "#/components/schemas/FleetSite"
+            },
+            "minItems": 1,
+            "title": "Sites",
+            "type": "array"
+          },
+          "trips": {
+            "items": {
+              "$ref": "#/components/schemas/FleetTrip"
+            },
+            "title": "Trips",
+            "type": "array"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/ChargeWindow"
+            },
+            "title": "Windows",
+            "type": "array"
+          },
+          "solver_seconds": {
+            "default": 30,
+            "maximum": 3600,
+            "minimum": 1,
+            "title": "Solver Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "horizon_slots",
+          "buses",
+          "sites",
+          "trips",
+          "windows"
+        ],
+        "title": "FleetInput",
+        "type": "object"
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "detail"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "SavedScenario": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "spec"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ScenarioSpec"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        }
+      },
+      "Run": {
+        "type": "object",
+        "required": [
+          "id",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scenario_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PlanResult": {
+        "type": "object",
+        "required": [
+          "optimization",
+          "simulation",
+          "explanations",
+          "metadata"
+        ],
+        "properties": {
+          "optimization": {
+            "type": "object"
+          },
+          "simulation": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "explanations": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "DatasetManifest": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "source",
+          "checksum"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "derived",
+              "assumed"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "license": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "checksum": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "security": [],
+        "summary": "Process health",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "security": [],
+        "summary": "Database readiness",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios": {
+      "post": {
+        "summary": "Create immutable scenario",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "spec"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "spec": {
+                    "$ref": "#/components/schemas/ScenarioSpec"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedScenario"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios/{id}": {
+      "get": {
+        "summary": "Get scenario",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedScenario"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios/{id}/runs": {
+      "post": {
+        "summary": "Queue idempotent calculation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{id}": {
+      "get": {
+        "summary": "Get run state",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{id}/cancel": {
+      "post": {
+        "summary": "Cancel queued or running run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{id}/results": {
+      "get": {
+        "summary": "Get completed plan and simulation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{id}/events": {
+      "get": {
+        "summary": "SSE stream with Last-Event-ID replay",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run events",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/datasets": {
+      "get": {
+        "summary": "List imported dataset versions",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DatasetManifest"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/map": {
+      "get": {
+        "summary": "GeoJSON in bounding box",
+        "parameters": [
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "west,south,east,north in WGS84"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "FeatureCollection",
+            "content": {
+              "application/geo+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tiles/{z}/{x}/{y}": {
+      "get": {
+        "summary": "PostGIS vector tile",
+        "parameters": [
+          {
+            "name": "z",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "x",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "y",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mapbox Vector Tile",
+            "content": {
+              "application/vnd.mapbox-vector-tile": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/corridors/check": {
+      "post": {
+        "summary": "Check route reachability and station outages",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorridorSpec"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fleets/schedule": {
+      "post": {
+        "summary": "Schedule charging for an assigned vehicle fleet",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetSpec"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
