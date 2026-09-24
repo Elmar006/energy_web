@@ -1,6 +1,9 @@
 <div align="center">
 
+
 <img src="frontend/public/brand-logo.png" alt="Логотип EV Infrastructure" width="80" height="80">
+
+
 
 
 <br>
