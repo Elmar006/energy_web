@@ -2,6 +2,20 @@
 
 <img src="frontend/public/brand-logo.png" alt="Логотип EV Infrastructure" width="80" height="80">
 
+<br>
+
+  ![Go](https://img.shields.io/badge/Go-Backend-00ADD8?logo=go&logoColor=white)
+  ![Python](https://img.shields.io/badge/Python-Optimization-3776AB?logo=python&logoColor=white)
+  ![PostgreSQL](https://img.shields.io/badge/PostgreSQL%20%2B%20PostGIS-Data-4169E1?logo=postgresql&logoColor=white)
+  ![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white)
+  ![Pyomo](https://img.shields.io/badge/Pyomo-MILP-5B2C6F)
+  ![HiGHS](https://img.shields.io/badge/HiGHS-Solver-1F6FEB)
+  ![SimPy](https://img.shields.io/badge/SimPy-Simulation-4B8BBE)
+  ![OSRM](https://img.shields.io/badge/OSRM-Routing-222222)
+  ![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539?logo=openapiinitiative&logoColor=white)
+
+<br>
+
 # EV Infrastructure Planning System
 
 Планирование зарядной сети с проверяемыми ограничениями бюджета, дорожной доступности и мощности подключения.
@@ -9,20 +23,6 @@
 <img src="docs/assets/project-card.png" alt="Фирменная карточка проекта" width="900">
 
 </div>
-
-<br>
-
-![Go](https://img.shields.io/badge/Go-Backend-00ADD8?logo=go&logoColor=white)
-![Python](https://img.shields.io/badge/Python-Optimization-3776AB?logo=python&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL%20%2B%20PostGIS-Data-4169E1?logo=postgresql&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white)
-![Pyomo](https://img.shields.io/badge/Pyomo-MILP-5B2C6F)
-![HiGHS](https://img.shields.io/badge/HiGHS-Solver-1F6FEB)
-![SimPy](https://img.shields.io/badge/SimPy-Simulation-4B8BBE)
-![OSRM](https://img.shields.io/badge/OSRM-Routing-222222)
-![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539?logo=openapiinitiative&logoColor=white)
-
-<br>
 
 ## Что работает сейчас
 
