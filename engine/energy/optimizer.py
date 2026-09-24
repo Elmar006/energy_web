@@ -32,6 +32,7 @@ class SolveResult:
     diagnostic: str | None = None
     risk_metrics: dict[str, float] = field(default_factory=dict)
     investment_rub_by_year: list[dict] = field(default_factory=list)
+    service_by_year: list[dict] = field(default_factory=list)
     energy_audit: list[dict] = field(default_factory=list)
     verification: dict[str, float | bool] = field(default_factory=dict)
 
@@ -39,7 +40,10 @@ class SolveResult:
         return self.__dict__
 
 
-def solve(spec: PlanningInput) -> SolveResult:
+def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None) -> SolveResult:
+    if minimum_service_fraction is not None and (not isfinite(minimum_service_fraction)
+                                                 or not 0 <= minimum_service_fraction <= 1):
+        raise ValueError("minimum_service_fraction must be between zero and one")
     d = spec
     par = d.parameters
     zones = {x.id: x for x in d.zones}
@@ -85,7 +89,8 @@ def solve(spec: PlanningInput) -> SolveResult:
     active = lambda s, o, p: sum(m.Y[s, o, k] for k in periods if k <= p)
     battery = lambda s, p: sum(m.B[s, k] for k in periods if k <= p)
     solar = lambda s, p: sum(m.G[s, k] for k in periods if k <= p)
-    upgraded = lambda n, p: sum(m.U[n, k] for k in periods if k <= p)
+    upgraded = lambda n, p: sum(m.U[n, k] for k in periods
+                                if k + nodes[n].upgrade_lead_years <= p)
     installed = lambda s, p: sum(active(s, o, p) for o in sites[s].option_ids)
     station_load = lambda s, p, q, h: sum(m.X[z, s, p, q, h] for z, _ in edge_by_site[s])
 
@@ -107,8 +112,10 @@ def solve(spec: PlanningInput) -> SolveResult:
 
     for node in d.grid_nodes:
         m.C.add(sum(m.U[node.id, p] for p in periods) <= 1)
-        if node.upgrade_kw == 0:
-            for p in periods:
+        for p in periods:
+            # An investment that cannot enter service within the planning
+            # horizon cannot improve this model and must not appear in a plan.
+            if node.upgrade_kw == 0 or p + node.upgrade_lead_years >= np:
                 m.U[node.id, p].fix(0)
 
     def invest(p):
@@ -157,8 +164,23 @@ def solve(spec: PlanningInput) -> SolveResult:
                         m.C.add(sum(m.X[z0, s, p, q, h] for z0, s in edge_by_zone[z] for h in hours) >= par.minimum_zone_service * sum(zone.hourly_kwh) * scenario.demand_multiplier[p])
 
     served = lambda q: sum(m.X[z, s, p, q, h] for z, s in edges for p in periods for h in hours)
+    served_year = lambda q, p: sum(m.X[z, s, p, q, h] for z, s in edges for h in hours)
     total_demand = {q: sum(sum(z.hourly_kwh) * scenarios[q].demand_multiplier[p]
                            for z in zones.values() for p in periods) for q in scenarios}
+    if minimum_service_fraction is not None:
+        reachable_zones = set(edge_by_zone) if edges else set()
+        for q in scenarios:
+            for p in periods:
+                demand_year = sum(z.hourly_kwh[h] * scenarios[q].demand_multiplier[p]
+                                  for z in zones.values() for h in hours)
+                if demand_year <= 0 or minimum_service_fraction <= 0:
+                    continue
+                reachable_demand = sum(sum(zones[z].hourly_kwh) * scenarios[q].demand_multiplier[p]
+                                       for z in reachable_zones)
+                if reachable_demand + 1e-8 < minimum_service_fraction * demand_year:
+                    return SolveResult("infeasible", None, None, [], [], [], [], {}, {}, {},
+                                       f"service target {minimum_service_fraction} exceeds reachable demand in year {par.years[p]}, scenario {q}")
+                m.C.add(served_year(q, p) >= minimum_service_fraction * demand_year)
     cash = {}
     for q, scenario in scenarios.items():
         annual = []
@@ -189,7 +211,9 @@ def solve(spec: PlanningInput) -> SolveResult:
         m.C.add(m.CVaRThreshold + sum(scenarios[q].probability * m.CVaRExcess[q]
                                       for q in scenarios) / (1 - par.cvar_alpha) <= risk_limit)
 
-    if par.mode == "operator":
+    if minimum_service_fraction is not None:
+        m.Objective = pyo.Objective(expr=sum(invest(p) for p in periods), sense=pyo.minimize)
+    elif par.mode == "operator":
         if par.risk == "worst_case":
             m.Worst = pyo.Var(within=pyo.Reals)
             for q in scenarios:
@@ -220,11 +244,11 @@ def solve(spec: PlanningInput) -> SolveResult:
     m.solutions.load_from(outcome)
     primary_objective = pyo.value(m.Objective)
 
-    if par.mode == "city" and term == "optimal":
-        # Lexicographic priorities avoid dimension-dependent arbitrary weights.
-        # First retain primary robust/expected coverage. Among its optima,
-        # maximize total scenario coverage, then minimize road detour, then
-        # maximize discounted cash flow. All tiers use one shared investment plan.
+    if (par.mode == "city" or minimum_service_fraction is not None) and term == "optimal":
+        # Retain the primary optimum: minimum CAPEX for an alternative, or
+        # robust/expected coverage for the city. The secondary objectives
+        # resolve ties without mixing rubles, energy and travel time into
+        # arbitrary weighted scores. Investment stays common to all scenarios.
         weighted_served = sum((scenarios[q].probability if par.risk in ("expected", "expected_cvar") else 1 / len(scenarios)) * served(q)
                               for q in scenarios)
         weighted_travel = sum((scenarios[q].probability if par.risk in ("expected", "expected_cvar") else 1 / len(scenarios))
@@ -233,20 +257,26 @@ def solve(spec: PlanningInput) -> SolveResult:
         weighted_cash = sum((scenarios[q].probability if par.risk in ("expected", "expected_cvar") else 1 / len(scenarios)) * cash[q]
                             for q in scenarios)
         tiers = []
-        if par.risk == "worst_case" and edges:
-            tiers.append(("total_service", weighted_served, pyo.maximize))
-        if edges:
-            tiers.append(("travel", weighted_travel, pyo.minimize))
-        tiers.append(("economy", weighted_cash, pyo.maximize))
+        if minimum_service_fraction is not None:
+            if edges:
+                tiers.append(("total_service", weighted_served, pyo.maximize))
+            tiers.append(("economy", weighted_cash, pyo.maximize))
+        else:
+            if par.risk == "worst_case" and edges:
+                tiers.append(("total_service", weighted_served, pyo.maximize))
+            if edges:
+                tiers.append(("travel", weighted_travel, pyo.minimize))
+            tiers.append(("economy", weighted_cash, pyo.maximize))
         previous = m.Objective
         previous_value = primary_objective
-        previous_sense = pyo.maximize
+        previous_sense = m.Objective.sense
         for name, expression, sense in tiers:
             remaining = deadline - monotonic()
             if remaining < 0.25:
                 break
-            tolerance = 1e-6 * max(1, abs(previous_value))
-            if edges or par.risk == "worst_case":
+            tolerance = (0.01 if minimum_service_fraction is not None and previous is m.Objective
+                         else 1e-6 * max(1, abs(previous_value)))
+            if minimum_service_fraction is not None or edges or par.risk == "worst_case":
                 m.C.add(previous.expr >= previous_value - tolerance if previous_sense == pyo.maximize
                         else previous.expr <= previous_value + tolerance)
             previous.deactivate()
@@ -266,17 +296,28 @@ def solve(spec: PlanningInput) -> SolveResult:
             previous_value = pyo.value(tier_objective)
             previous_sense = sense
             previous = tier_objective
-            outcome = tier_outcome
     selected = [dict(site_id=s, option_id=o, year=par.years[p]) for s, o in site_options for p in periods if pyo.value(m.Y[s, o, p]) > 0.5]
-    upgrades = [dict(grid_node_id=n, year=par.years[p]) for n in nodes for p in periods if pyo.value(m.U[n, p]) > 0.5]
+    upgrades = [dict(grid_node_id=n, year=par.years[p],
+                     commissioned_year=par.years[p + nodes[n].upgrade_lead_years])
+                for n in nodes for p in periods if pyo.value(m.U[n, p]) > 0.5]
     batteries = [dict(site_id=s, year=par.years[p], kwh=round(pyo.value(m.B[s, p]), 4)) for s in sites for p in periods if pyo.value(m.B[s, p]) > 1e-6]
     pv = [dict(site_id=s, year=par.years[p], kw=round(pyo.value(m.G[s, p]), 4)) for s in sites for p in periods if pyo.value(m.G[s, p]) > 1e-6]
     served_raw = {q: pyo.value(served(q)) for q in scenarios}
     unmet_raw = {q: max(0, total_demand[q] - served_raw[q]) for q in scenarios}
     served_out = {q: round(value, 4) for q, value in served_raw.items()}
     unmet = {q: round(value, 4) for q, value in unmet_raw.items()}
-    gap = None
-    if hasattr(outcome.solver, "best_feasible_objective") and hasattr(outcome.solver, "best_objective_bound"):
+    service_by_year = []
+    for q, scenario in scenarios.items():
+        for p in periods:
+            demand_year = sum(sum(zone.hourly_kwh) * scenario.demand_multiplier[p]
+                              for zone in zones.values())
+            served_value = pyo.value(served_year(q, p))
+            service_by_year.append({"scenario_id": q, "year": par.years[p],
+                                    "demand_kwh": demand_year,
+                                    "served_kwh": served_value,
+                                    "unmet_kwh": max(0, demand_year - served_value)})
+    gap = 0.0 if term == "optimal" else None
+    if term != "optimal" and hasattr(outcome.solver, "best_feasible_objective") and hasattr(outcome.solver, "best_objective_bound"):
         primal, dual = outcome.solver.best_feasible_objective, outcome.solver.best_objective_bound
         if primal is not None and dual is not None and isfinite(primal) and isfinite(dual):
             gap = abs(primal - dual) / max(1, abs(primal))
@@ -302,6 +343,12 @@ def solve(spec: PlanningInput) -> SolveResult:
         [max(0, value - par.annual_budgets_rub[p]) for p, value in enumerate(investment_raw)]
         + [max(0, sum(investment_raw) - par.total_budget_rub)]
     )
+    max_service_floor_shortfall = (max((minimum_service_fraction *
+                                        sum(z.hourly_kwh[h] * scenarios[q].demand_multiplier[p]
+                                            for z in zones.values() for h in hours)
+                                        - pyo.value(served_year(q, p))
+                                        for q in scenarios for p in periods), default=0)
+                                   if minimum_service_fraction is not None else 0)
     energy_audit = []
     energy_audit_rows_total = 0
     max_balance_error = 0.0
@@ -403,6 +450,7 @@ def solve(spec: PlanningInput) -> SolveResult:
         "max_simultaneous_storage_kw": round(max(0, max_simultaneous_storage), 8),
         "max_demand_oversupply_kwh": round(max(0, max_demand_oversupply), 8),
         "max_budget_overrun_rub": round(max_budget_overrun, 8),
+        "max_service_floor_shortfall_kwh": round(max(0, max_service_floor_shortfall), 8),
         "energy_audit_rows_total": energy_audit_rows_total,
         "energy_audit_truncated": energy_audit_rows_total > len(energy_audit),
     }
@@ -417,6 +465,7 @@ def solve(spec: PlanningInput) -> SolveResult:
                               and max_storage_power_overload <= 1e-6
                               and max_simultaneous_storage <= 1e-6
                               and max_demand_oversupply <= 1e-6
+                              and max_service_floor_shortfall <= 1e-6
                               and max_budget_overrun <= 1e-4)
     if not verification["passed"]:
         return SolveResult("error", None, None, [], [], [], [], {}, {}, {},
@@ -425,4 +474,5 @@ def solve(spec: PlanningInput) -> SolveResult:
     return SolveResult("optimal" if term == "optimal" else "feasible", round(primary_objective, 4), gap,
                        selected, upgrades, batteries, pv, served_out, unmet, cash_out,
                        risk_metrics=risk_metrics, investment_rub_by_year=investment_by_year,
-                       energy_audit=energy_audit, verification=verification)
+                       service_by_year=service_by_year, energy_audit=energy_audit,
+                       verification=verification)

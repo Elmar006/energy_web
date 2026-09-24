@@ -23,7 +23,8 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
     options = {o.id: o for o in spec.options}
     nodes = {n.id: n for n in spec.grid_nodes}
     selected = {x["site_id"]: options[x["option_id"]] for x in selected if x["year"] <= year}
-    upgraded_nodes = {x["grid_node_id"] for x in (grid_upgrades or []) if x["year"] <= year}
+    upgraded_nodes = {x["grid_node_id"] for x in (grid_upgrades or [])
+                      if x.get("commissioned_year", x["year"]) <= year}
     travel = {(e.zone_id, e.site_id): e.minutes for e in spec.travel_edges}
     node_ports = defaultdict(int)
     for sid, option in selected.items():

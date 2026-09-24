@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,6 +34,31 @@ func TestScenarioValidationRejectsBrokenPlanningInputBeforeDatabase(t *testing.T
 	}
 }
 
+func TestDatasetUploadRejectsAmbiguousMetadataBeforeRepository(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("name", "sample")
+	_ = writer.WriteField("kind", "assumed")
+	_ = writer.WriteField("kind", "observed")
+	_ = writer.WriteField("source", "test")
+	file, err := writer.CreateFormFile("file", "sample.geojson")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = file.Write([]byte(`{"type":"FeatureCollection","features":[]}`))
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/datasets/import", &body)
+	request.Header.Set("Authorization", "Bearer test-secret-token")
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response := httptest.NewRecorder()
+	(Server{Token: "test-secret-token"}).Handler().ServeHTTP(response, request)
+	if response.Code != 422 || !strings.Contains(response.Body.String(), "repeated metadata") {
+		t.Fatalf("ambiguous metadata passed: %d %s", response.Code, response.Body.String())
+	}
+}
+
 func TestAuthAndRequestValidation(t *testing.T) {
 	handler := (Server{Token: "test-secret-token"}).Handler()
 	for _, tc := range []struct {
@@ -39,10 +66,15 @@ func TestAuthAndRequestValidation(t *testing.T) {
 		want              int
 	}{
 		{"no token", "/api/v1/map?bbox=37,55,38,56", "", 401},
+		{"dataset upload needs token", "/api/v1/datasets/import", "", 401},
+		{"dataset preview needs token", "/api/v1/scenarios/from-datasets/preview", "", 401},
 		{"wrong token", "/api/v1/map?bbox=37,55,38,56", "other-secret-token", 401},
 		{"bad bbox", "/api/v1/map?bbox=37,55,36,56", "test-secret-token", 422},
 		{"nonfinite bbox", "/api/v1/map?bbox=NaN,55,38,56", "test-secret-token", 422},
 		{"bad tile", "/api/v1/tiles/9/999/160", "test-secret-token", 422},
+		{"bad scenario UUID", "/api/v1/scenarios/not-a-uuid", "test-secret-token", 422},
+		{"bad run UUID", "/api/v1/runs/not-a-uuid", "test-secret-token", 422},
+		{"bad result UUID", "/api/v1/runs/not-a-uuid/results", "test-secret-token", 422},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)

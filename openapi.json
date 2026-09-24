@@ -24,6 +24,7 @@
     },
     "schemas": {
       "ChargerOption": {
+        "additionalProperties": false,
         "properties": {
           "id": {
             "minLength": 1,
@@ -81,6 +82,7 @@
         "type": "object"
       },
       "DatasetReference": {
+        "additionalProperties": false,
         "properties": {
           "name": {
             "minLength": 1,
@@ -90,10 +92,12 @@
           "role": {
             "enum": [
               "demand_sessions",
+              "demand_zones",
               "candidate_sites",
               "grid",
               "tariff",
               "routing",
+              "planning_assumptions",
               "other"
             ],
             "title": "Role",
@@ -117,6 +121,19 @@
             "pattern": "^[0-9a-f]{64}$",
             "title": "Sha256",
             "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Version Id"
           },
           "license": {
             "anyOf": [
@@ -154,6 +171,7 @@
         "type": "object"
       },
       "GridNode": {
+        "additionalProperties": false,
         "properties": {
           "id": {
             "minLength": 1,
@@ -181,6 +199,12 @@
             "title": "Upgrade Capex Rub",
             "type": "number"
           },
+          "upgrade_lead_years": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Upgrade Lead Years",
+            "type": "integer"
+          },
           "provenance": {
             "$ref": "#/components/schemas/Provenance"
           }
@@ -194,6 +218,7 @@
         "type": "object"
       },
       "Parameters": {
+        "additionalProperties": false,
         "properties": {
           "mode": {
             "enum": [
@@ -340,6 +365,7 @@
         "type": "object"
       },
       "Provenance": {
+        "additionalProperties": false,
         "properties": {
           "source": {
             "minLength": 1,
@@ -376,6 +402,7 @@
         "type": "object"
       },
       "Scenario": {
+        "additionalProperties": false,
         "properties": {
           "id": {
             "minLength": 1,
@@ -424,6 +451,7 @@
         "type": "object"
       },
       "Site": {
+        "additionalProperties": false,
         "properties": {
           "id": {
             "minLength": 1,
@@ -518,6 +546,7 @@
         "type": "object"
       },
       "TravelEdge": {
+        "additionalProperties": false,
         "properties": {
           "zone_id": {
             "minLength": 1,
@@ -544,6 +573,7 @@
         "type": "object"
       },
       "Zone": {
+        "additionalProperties": false,
         "properties": {
           "id": {
             "minLength": 1,
@@ -784,11 +814,24 @@
         "type": "object"
       },
       "ScenarioSpec": {
+        "additionalProperties": false,
         "properties": {
           "id": {
             "minLength": 1,
             "title": "Id",
             "type": "string"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Time Zone"
           },
           "zones": {
             "items": {
@@ -1133,6 +1176,36 @@
           }
         }
       },
+      "ServiceYear": {
+        "type": "object",
+        "required": [
+          "scenario_id",
+          "year",
+          "demand_kwh",
+          "served_kwh",
+          "unmet_kwh"
+        ],
+        "properties": {
+          "scenario_id": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "demand_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "served_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unmet_kwh": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
       "EnergyAudit": {
         "type": "object",
         "required": [
@@ -1233,6 +1306,10 @@
             "type": "number",
             "minimum": 0
           },
+          "max_service_floor_shortfall_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
           "energy_audit_rows_total": {
             "type": "integer",
             "minimum": 0
@@ -1261,6 +1338,7 @@
           "diagnostic",
           "risk_metrics",
           "investment_rub_by_year",
+          "service_by_year",
           "energy_audit",
           "verification"
         ],
@@ -1314,13 +1392,17 @@
               "type": "object",
               "required": [
                 "grid_node_id",
-                "year"
+                "year",
+                "commissioned_year"
               ],
               "properties": {
                 "grid_node_id": {
                   "type": "string"
                 },
                 "year": {
+                  "type": "integer"
+                },
+                "commissioned_year": {
                   "type": "integer"
                 }
               }
@@ -1401,6 +1483,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/InvestmentYear"
+            }
+          },
+          "service_by_year": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceYear"
             }
           },
           "energy_audit": {
@@ -1514,12 +1602,59 @@
           }
         }
       },
+      "AlternativePlan": {
+        "type": "object",
+        "required": [
+          "target_service_fraction",
+          "objective_kind",
+          "achieved_min_service_fraction",
+          "same_investment_as_target",
+          "optimization",
+          "simulation"
+        ],
+        "properties": {
+          "target_service_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "objective_kind": {
+            "const": "minimum_investment_rub"
+          },
+          "achieved_min_service_fraction": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "same_investment_as_target": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "optimization": {
+            "$ref": "#/components/schemas/OptimizationResult"
+          },
+          "simulation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimulationResult"
+            }
+          }
+        }
+      },
       "PlanResult": {
         "type": "object",
         "required": [
           "optimization",
           "simulation",
           "explanations",
+          "alternatives",
           "metadata"
         ],
         "properties": {
@@ -1538,6 +1673,12 @@
               "type": "object"
             }
           },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlternativePlan"
+            }
+          },
           "metadata": {
             "type": "object"
           }
@@ -1550,7 +1691,8 @@
           "name",
           "kind",
           "source",
-          "checksum"
+          "checksum",
+          "created_at"
         ],
         "properties": {
           "id": {
@@ -1579,6 +1721,232 @@
           },
           "checksum": {
             "type": "string"
+          },
+          "captured_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DatasetImportResult": {
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "features",
+          "sha256"
+        ],
+        "properties": {
+          "dataset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "features": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string"
+          }
+        }
+      },
+      "DatasetSelection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "demand_zones",
+          "candidate_sites",
+          "grid_nodes",
+          "travel_edges"
+        ],
+        "properties": {
+          "demand_zones": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "candidate_sites": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "grid_nodes": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "travel_edges": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "DatasetScenarioRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "input_id",
+          "time_zone",
+          "dataset_versions",
+          "options",
+          "parameters",
+          "scenarios"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "input_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "time_zone": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "IANA zone shared by demand and grid hourly profiles"
+          },
+          "dataset_versions": {
+            "$ref": "#/components/schemas/DatasetSelection"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChargerOption"
+            }
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/Parameters"
+          },
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scenario"
+            }
+          },
+          "locked_site_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "excluded_site_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DatasetUse": {
+        "type": "object",
+        "required": [
+          "role",
+          "version_id",
+          "name",
+          "kind",
+          "source",
+          "sha256",
+          "feature_count"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "derived",
+              "assumed"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "license": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captured_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "feature_count": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "DataQuality": {
+        "type": "object",
+        "required": [
+          "datasets",
+          "warnings"
+        ],
+        "properties": {
+          "datasets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatasetUse"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PreparedDatasetScenario": {
+        "type": "object",
+        "required": [
+          "spec",
+          "data_quality"
+        ],
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/ScenarioSpec"
+          },
+          "data_quality": {
+            "$ref": "#/components/schemas/DataQuality"
+          }
+        }
+      },
+      "SavedDatasetScenario": {
+        "type": "object",
+        "required": [
+          "scenario",
+          "data_quality"
+        ],
+        "properties": {
+          "scenario": {
+            "$ref": "#/components/schemas/SavedScenario"
+          },
+          "data_quality": {
+            "$ref": "#/components/schemas/DataQuality"
           }
         }
       }
@@ -1693,6 +2061,140 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SavedScenario"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios/from-datasets/preview": {
+      "post": {
+        "summary": "Validate exact imported versions and preview a planning input without saving",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetScenarioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparedDatasetScenario"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios/from-datasets": {
+      "post": {
+        "summary": "Assemble and save an immutable scenario from exact imported versions",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetScenarioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedDatasetScenario"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -2098,6 +2600,102 @@
                   "items": {
                     "$ref": "#/components/schemas/DatasetManifest"
                   }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/datasets/import": {
+      "post": {
+        "summary": "Atomically import a versioned GeoJSON FeatureCollection",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "kind",
+                  "source",
+                  "file"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "derived",
+                      "assumed"
+                    ]
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  },
+                  "license": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "captured_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Required for observed imports"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetImportResult"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }

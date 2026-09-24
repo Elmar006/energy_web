@@ -58,6 +58,7 @@ def main() -> None:
     assert result["optimization"]["status"] in ("optimal", "feasible"), result
     assert result["optimization"]["verification"]["passed"] is True
     assert result["optimization"]["investment_rub_by_year"]
+    assert result["optimization"]["service_by_year"]
     assert result["optimization"]["energy_audit"]
     assert result["optimization"]["selected"], "no sites selected"
     assert result["simulation"], "simulation missing"
@@ -66,6 +67,19 @@ def main() -> None:
         assert 0 <= sample["partial_energy_kwh"] <= sample["energy_kwh"]
         assert sample["last_completion_minute"] is None or sample["last_completion_minute"] <= 1440
     assert result["explanations"], "counterfactual explanation missing"
+    assert [item["target_service_fraction"] for item in result["alternatives"]] == [0, 0.5, 1]
+    for alternative in result["alternatives"]:
+        assert "same_investment_as_target" in alternative
+        optimization = alternative["optimization"]
+        if optimization["status"] in ("optimal", "feasible"):
+            assert optimization["verification"]["passed"] is True
+            assert alternative["achieved_min_service_fraction"] is not None
+            assert alternative["achieved_min_service_fraction"] + 1e-4 >= alternative["target_service_fraction"]
+            assert alternative["simulation"]
+            for sample in alternative["simulation"]:
+                assert sample["seed"] in result["metadata"]["simulation_seeds"]
+        else:
+            assert alternative["simulation"] == []
     corridor = call("POST", "/api/v1/corridors/check", {
         "route_km": 300, "battery_usable_kwh": 60, "initial_soc": 1,
         "reserve_soc": 0.1, "consumption_kwh_per_km": 0.2,
@@ -155,6 +169,7 @@ def main() -> None:
     cvar_result = call("GET", f"/api/v1/runs/{cvar_run['id']}/results")
     assert cvar_result["optimization"]["status"] == "optimal", cvar_result
     assert cvar_result["optimization"]["risk_metrics"]["cvar_unmet_kwh"] == 0
+    assert cvar_result["alternatives"][2]["optimization"]["status"] in ("optimal", "feasible")
     extra_path = os.environ.get("ENERGY_EXTRA_SCENARIO")
     if extra_path:
         extra_spec = json.loads(Path(extra_path).read_text(encoding="utf-8"))

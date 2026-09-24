@@ -33,8 +33,39 @@ def test_no_grid_capacity_requires_upgrade(small_input):
     small_input.grid_nodes[0].upgrade_capex_rub = 500
     result = solve(small_input)
     assert result.status == "optimal", result.diagnostic
-    assert result.grid_upgrades == [{"grid_node_id": "g1", "year": 2027}]
+    assert result.grid_upgrades == [{"grid_node_id": "g1", "year": 2027, "commissioned_year": 2027}]
     assert result.served_kwh["base"] == 10
+
+
+def test_grid_upgrade_lead_time_delays_capacity_but_not_capex(small_input):
+    raw = small_input.model_dump()
+    raw["parameters"].update({"years": [2027, 2028],
+                              "annual_budgets_rub": [1500, 0], "total_budget_rub": 1500})
+    raw["scenarios"][0]["demand_multiplier"] = [1, 1]
+    raw["grid_nodes"][0].update({"headroom_kw": [0] * 24, "upgrade_kw": 10,
+                                  "upgrade_capex_rub": 500, "upgrade_lead_years": 1})
+    result = solve(PlanningInput.model_validate(raw))
+    assert result.status == "optimal", result.diagnostic
+    assert result.grid_upgrades == [{"grid_node_id": "g1", "year": 2027,
+                                     "commissioned_year": 2028}]
+    assert result.investment_rub_by_year == [{"year": 2027, "rub": 1500},
+                                              {"year": 2028, "rub": 0}]
+    assert result.served_kwh["base"] == 10
+    assert result.service_by_year == [
+        {"scenario_id": "base", "year": 2027, "demand_kwh": 10, "served_kwh": 0, "unmet_kwh": 10},
+        {"scenario_id": "base", "year": 2028, "demand_kwh": 10, "served_kwh": 10, "unmet_kwh": 0},
+    ]
+    assert result.verification["passed"] is True
+
+
+def test_upgrade_cannot_be_purchased_if_commissioning_exceeds_horizon(small_input):
+    small_input.grid_nodes[0].headroom_kw = [0] * 24
+    small_input.grid_nodes[0].upgrade_kw = 10
+    small_input.grid_nodes[0].upgrade_lead_years = 1
+    result = solve(small_input)
+    assert result.status == "optimal", result.diagnostic
+    assert result.grid_upgrades == []
+    assert result.served_kwh["base"] == 0
 
 
 def test_operator_may_decline_unprofitable_station(small_input):
@@ -105,6 +136,74 @@ def test_optimizer_matches_exhaustive_search_on_two_sites(small_input):
         assert result.served_kwh["base"] == exhaustive
 
 
+def test_minimum_investment_frontier_matches_exhaustive_two_site_tradeoff(small_input):
+    raw = small_input.model_dump()
+    raw["zones"].append({**raw["zones"][0], "id": "z2", "name": "Zone 2"})
+    raw["sites"].append({**raw["sites"][0], "id": "s2", "name": "Station 2", "grid_node_id": "g2"})
+    raw["grid_nodes"].append({**raw["grid_nodes"][0], "id": "g2"})
+    raw["travel_edges"].append({"zone_id": "z2", "site_id": "s2", "minutes": 5})
+    spec = PlanningInput.model_validate(raw)
+    for fraction, investment, served in ((0, 0, 0), (0.5, 1000, 10), (0.75, 2000, 20), (1, 2000, 20)):
+        result = solve(spec, minimum_service_fraction=fraction)
+        exhaustive = min(1000 * mask.bit_count() for mask in range(4)
+                         if 10 * mask.bit_count() >= fraction * 20)
+        assert result.status == "optimal", result.diagnostic
+        assert result.objective == investment == exhaustive
+        assert sum(row["rub"] for row in result.investment_rub_by_year) == investment
+        assert result.served_kwh["base"] == served
+        assert result.verification["max_service_floor_shortfall_kwh"] == 0
+        assert result.verification["passed"] is True
+
+
+def test_minimum_investment_respects_budget_and_unreachable_demand(small_input):
+    small_input.parameters.total_budget_rub = 0
+    small_input.parameters.annual_budgets_rub = [0]
+    assert solve(small_input, minimum_service_fraction=1).status == "infeasible"
+    small_input.parameters.total_budget_rub = 2000
+    small_input.parameters.annual_budgets_rub = [2000]
+    small_input.travel_edges = []
+    assert solve(small_input, minimum_service_fraction=1).status == "infeasible"
+
+
+def test_operator_frontier_can_require_unprofitable_construction(small_input):
+    small_input.parameters.mode = "operator"
+    small_input.parameters.sale_rub_per_kwh = 0
+    assert solve(small_input).selected == []
+    required = solve(small_input, minimum_service_fraction=1)
+    assert required.status == "optimal", required.diagnostic
+    assert required.objective == 1000
+    assert required.selected == [{"site_id": "s1", "option_id": "dc", "year": 2027}]
+    assert required.cashflow_rub["base"] < 0
+
+
+def test_service_floor_applies_in_each_year_not_only_in_aggregate(small_input):
+    raw = small_input.model_dump()
+    raw["parameters"].update({"years": [2027, 2028],
+                              "annual_budgets_rub": [1500, 0], "total_budget_rub": 1500})
+    raw["scenarios"][0]["demand_multiplier"] = [1, 1]
+    raw["grid_nodes"][0].update({"headroom_kw": [0] * 24, "upgrade_kw": 10,
+                                  "upgrade_capex_rub": 500, "upgrade_lead_years": 1})
+    spec = PlanningInput.model_validate(raw)
+    assert solve(spec).served_kwh["base"] == 10
+    result = solve(spec, minimum_service_fraction=0.5)
+    assert result.status == "infeasible", result.diagnostic
+
+
+def test_service_floor_applies_to_each_scenario_not_expected_demand(small_input):
+    small_input.scenarios.append(small_input.scenarios[0].model_copy(
+        update={"id": "high", "demand_multiplier": [2]}))
+    feasible = solve(small_input, minimum_service_fraction=0.5)
+    assert feasible.status == "optimal", feasible.diagnostic
+    assert feasible.service_by_year == [
+        {"scenario_id": "base", "year": 2027, "demand_kwh": 10, "served_kwh": 10, "unmet_kwh": 0},
+        {"scenario_id": "high", "year": 2027, "demand_kwh": 20, "served_kwh": 10, "unmet_kwh": 10},
+    ]
+    assert feasible.verification["max_service_floor_shortfall_kwh"] == 0
+
+    infeasible = solve(small_input, minimum_service_fraction=0.75)
+    assert infeasible.status == "infeasible", infeasible.diagnostic
+
+
 def test_two_sites_cannot_spend_shared_node_headroom_twice(small_input):
     raw = small_input.model_dump()
     raw["zones"].append({**raw["zones"][0], "id": "z2", "name": "Zone 2"})
@@ -120,7 +219,7 @@ def test_two_sites_cannot_spend_shared_node_headroom_twice(small_input):
     upgraded = solve(PlanningInput.model_validate(raw))
     assert upgraded.status == "optimal", upgraded.diagnostic
     assert upgraded.served_kwh["base"] == 20
-    assert upgraded.grid_upgrades == [{"grid_node_id": "g1", "year": 2027}]
+    assert upgraded.grid_upgrades == [{"grid_node_id": "g1", "year": 2027, "commissioned_year": 2027}]
     assert upgraded.investment_rub_by_year == [{"year": 2027, "rub": 2500.0}]
     assert upgraded.verification["passed"] is True
 

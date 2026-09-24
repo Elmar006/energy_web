@@ -10,6 +10,7 @@ from energy.contracts import PlanningInput
     [
         (("zones", 0, "hourly_kwh"), [-1] + [0] * 23, "hourly_kwh"),
         (("grid_nodes", 0, "headroom_kw"), [-1] + [0] * 23, "headroom_kw"),
+        (("grid_nodes", 0, "upgrade_lead_years"), -1, "upgrade_lead_years"),
         (("scenarios", 0, "demand_multiplier"), [-1], "demand_multiplier"),
         (("parameters", "annual_budgets_rub"), [-1], "annual_budgets_rub"),
         (("parameters", "years"), [2027, 2029], "years"),
@@ -101,4 +102,28 @@ def test_empty_identifiers_are_rejected(small_input, path):
         target = target[key]
     target[path[-1]] = ""
     with pytest.raises(ValidationError):
+        PlanningInput.model_validate(raw)
+
+
+def test_dataset_backed_input_validates_timezone_and_version_identifiers(small_input):
+    raw = small_input.model_dump()
+    raw["time_zone"] = "Europe/Moscow"
+    raw["datasets"] = [{"name": "Imported demand", "role": "demand_zones",
+                        "kind": "observed", "source": "supplier",
+                        "sha256": "a" * 64,
+                        "version_id": "00000000-0000-4000-8000-000000000001"}]
+    assert PlanningInput.model_validate(raw).time_zone == "Europe/Moscow"
+    raw["time_zone"] = "Invalid/Imaginary"
+    with pytest.raises(ValidationError, match="time_zone"):
+        PlanningInput.model_validate(raw)
+    raw["time_zone"] = "Europe/Moscow"
+    raw["datasets"][0]["version_id"] = "latest"
+    with pytest.raises(ValidationError, match="version_id"):
+        PlanningInput.model_validate(raw)
+
+
+def test_misspelled_optional_planning_parameter_is_rejected(small_input):
+    raw = small_input.model_dump()
+    raw["parameters"]["storage_effeciency"] = 0.9
+    with pytest.raises(ValidationError, match="storage_effeciency"):
         PlanningInput.model_validate(raw)
