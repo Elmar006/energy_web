@@ -24,14 +24,21 @@ type Optimization = {
   cashflow_rub: Record<string, number>;
   diagnostic: string | null;
   risk_metrics?: { cvar_alpha?: number; cvar_loss_rub?: number; cvar_unmet_kwh?: number };
+  investment_rub_by_year?: { year: number; rub: number }[];
+  energy_audit?: { scenario_id: string; year: number; site_id: string; served_kwh: number; grid_kwh: number; peak_grid_kw: number; peak_station_kw: number }[];
+  verification?: { passed?: boolean; max_hourly_energy_balance_error_kwh?: number; max_grid_node_overload_kw?: number; max_budget_overrun_rub?: number; energy_audit_truncated?: boolean };
 };
 type Simulation = {
   year: number; scenario_id: string; seed: number;
   arrivals: number; served_sessions: number; refused_sessions: number;
   mean_wait_minutes: number | null; p95_wait_minutes: number | null;
+  day_dispatch?: { day_index: number; arrivals: number; queued_sessions_at_boundary: number; dispatch_by_site: { site_id: string; load_kwh: number; grid_kwh: number }[] }[];
 };
 type Explanation = { site_id: string; status: string; lost_served_kwh: Record<string, number> | null; replacement_sites: string[]; method: string };
-type Result = { optimization: Optimization; simulation: Simulation[]; explanations?: Explanation[] };
+type OperationalValidation = { scenario_id: string; year: number; seeds: number; optimized_service_fraction: number; simulated_service_fraction_mean: number; service_gap_percentage_points: number };
+type Alternative = { target_service_fraction: number; achieved_min_service_fraction: number | null; same_investment_as_target: number | null; optimization: Optimization; operational_validation?: OperationalValidation[] };
+type InputQuality = { demand_scope: string; warnings: string[]; observed_session_zone_ids: string[]; parametric_zone_ids: string[] };
+type Result = { optimization: Optimization; simulation: Simulation[]; explanations?: Explanation[]; alternatives?: Alternative[]; operational_validation?: OperationalValidation[]; metadata?: { input_quality?: InputQuality; input_sha256?: string; simulation_days?: number } };
 type Run = { id: string; scenario_id: string; state: string; error_detail?: string };
 type SavedScenario = { id: string; name: string; spec: PlanningSpec };
 type ScenarioSummary = { id: string; name: string; sha256: string; created_at: string };
@@ -39,6 +46,18 @@ type ScenarioSummary = { id: string; name: string; sha256: string; created_at: s
 const money = (value: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value / 1_000_000);
 const number = (value: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value);
 const precise = (value: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value);
+const solverStatus = (value: string) => ({ optimal: "Оптимально", feasible: "Допустимо", infeasible: "Невозможно", error: "Ошибка" })[value as "optimal" | "feasible" | "infeasible" | "error"] ?? value;
+const inputWarningLabel = (value: string) => ({
+  "Observed charging sessions describe fulfilled charging only; latent unmet demand is unknown.": "История зарядок охватывает только выполненные сессии; скрытый неудовлетворённый спрос неизвестен.",
+  "The 'observed' source label is supplied by the importer and has not been independently verified.": "Метка «наблюдалось» заявлена при импорте и не проверена независимо.",
+  "Session export day-by-day completeness is unverified for some zones; days without records are rejected unless full coverage is explicitly asserted.": "Для части зон полнота выгрузки по дням не подтверждена; пустые дни требуют явного заявления о полном покрытии.",
+  "Complete day-by-day session coverage was asserted by the importer, not independently verified.": "Полнота истории по дням заявлена поставщиком, но не проверена независимо.",
+  "Hourly charging load was apportioned uniformly across each session duration; interval meter readings were not supplied.": "Почасовая нагрузка распределена по длительности сессий; интервальных показаний счётчика нет.",
+  "Some session profiles are declared assumed; their apparent precision does not imply measurement.": "Часть профилей сессий предположена; точные числа не означают, что они измерены.",
+  "Zones without session profiles infer arrivals from hourly energy and assumed mean session size.": "В зонах без истории сессий прибытия оценены из почасовой энергии и предполагаемого размера сессии.",
+  "At least one session profile has fewer than 7 days or 30 sessions; its temporal and energy distributions are weakly estimated.": "Для части профилей доступно менее 7 дней или 30 сессий; распределения оценены слабо.",
+  "At least one grid headroom profile is not labeled observed; connection feasibility remains scenario-based.": "Резерв мощности хотя бы одного узла не подтверждён наблюдениями; подключение остаётся сценарным допущением.",
+})[value] ?? value;
 const plural = (value: number, one: string, few: string, many: string) => {
   const mod100 = value % 100, mod10 = value % 10;
   return value + " " + (mod100 >= 11 && mod100 <= 14 ? many : mod10 === 1 ? one : mod10 >= 2 && mod10 <= 4 ? few : many);
@@ -198,8 +217,25 @@ export default function Home() {
   const unmet = plan?.unmet_kwh[primaryScenario] || 0;
   const rate = base + unmet > 0 ? Math.round(base / (base + unmet) * 100) : 0;
   const simulations = result?.simulation.filter((s) => s.scenario_id === primaryScenario && s.year === firstYear) || [];
-  const avgWait = simulations.length ? simulations.reduce((total, s) => total + (s.p95_wait_minutes || 0), 0) / simulations.length : null;
+  const measuredWaits = simulations.map((sample) => sample.p95_wait_minutes).filter((value): value is number => value !== null && value !== undefined);
+  const avgWait = measuredWaits.length ? measuredWaits.reduce((total, value) => total + value, 0) / measuredWaits.length : null;
   const scenarios = plan ? Object.keys(plan.served_kwh) : [];
+  const comparison = plan ? [{ name: "Основной план", optimization: plan, validation: result?.operational_validation },
+    ...(result?.alternatives || []).map((alternative) => ({
+      name: `Порог ${Math.round(alternative.target_service_fraction * 100)}%`,
+      optimization: alternative.optimization, validation: alternative.operational_validation,
+    }))] : [];
+  const operationalRuns = simulations.filter((run) => run.day_dispatch?.length);
+  const dayCount = Math.max(0, ...operationalRuns.map((run) => run.day_dispatch?.length || 0));
+  const dayRows = Array.from({ length: dayCount }, (_, day) => {
+    const rows = operationalRuns.map((run) => run.day_dispatch?.[day]).filter((row) => row !== undefined);
+    const divisor = rows.length || 1;
+    return { day: day + 1, arrivals: rows.reduce((sum, row) => sum + row.arrivals, 0) / divisor,
+      delivered: rows.reduce((sum, row) => sum + row.dispatch_by_site.reduce((total, site) => total + site.load_kwh, 0), 0) / divisor,
+      grid: rows.reduce((sum, row) => sum + row.dispatch_by_site.reduce((total, site) => total + site.grid_kwh, 0), 0) / divisor,
+      queue: rows.reduce((sum, row) => sum + row.queued_sessions_at_boundary, 0) / divisor };
+  });
+  const auditRows = plan?.energy_audit?.filter((row) => row.scenario_id === primaryScenario && row.year === firstYear) || [];
 
   return <div className="app-shell">
     <header className="app-header">
@@ -217,7 +253,7 @@ export default function Home() {
         <aside className="control-panel" aria-labelledby="scenario-title">
           <div className="panel-heading"><span className="panel-icon"><Activity size={18} /></span><div><p className="eyebrow">ПАРАМЕТРЫ РАСЧЁТА</p><h2 id="scenario-title">Новый сценарий</h2></div></div>
           <div className="scenario-source"><label htmlFor="saved-scenario">Источник расчёта</label><select id="saved-scenario" value={loadedScenario?.id ?? ""} onChange={(event) => void chooseScenario(event.target.value)}><option value="">Демо · синтетические данные</option>{savedScenarios.filter((item) => !item.name.startsWith("Демо ·")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><label className="file-label" htmlFor="scenario-file">Загрузить PlanningInput JSON</label><input id="scenario-file" className="file-input" type="file" accept=".json,application/json" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadScenario(file); event.currentTarget.value = ""; }} /><small>{uploading ? "Проверяем и сохраняем…" : "Площадки, спрос, сеть, тарифы и происхождение данных проверяются перед сохранением."}</small></div>
-          {loadedScenario && <div className="source-quality"><strong>Качество входа</strong><span>{provenance.observed} наблюдаемых · {provenance.derived} вычисленных · {provenance.assumed} предположенных записей.</span>{activeSpec.datasets?.length ? <ul>{activeSpec.datasets.map((dataset) => <li key={dataset.sha256}><strong>{dataset.name} · {dataset.kind}</strong><span>{dataset.source}</span><code>SHA-256 {dataset.sha256.slice(0, 12)}…</code></li>)}</ul> : <span>Манифест исходных файлов не указан. Смотрите происхождение у объектов в JSON.</span>}</div>}
+          {loadedScenario && <div className="source-quality"><strong>Качество входа</strong><span>Записи спроса, площадок и узлов: {provenance.observed} наблюдаемых · {provenance.derived} вычисленных · {provenance.assumed} предположенных.</span>{activeSpec.datasets?.length ? <ul>{activeSpec.datasets.map((dataset) => <li key={dataset.sha256}><strong>{dataset.name} · {dataset.kind}</strong><span>{dataset.source}</span><code>SHA-256 {dataset.sha256.slice(0, 12)}…</code></li>)}</ul> : <span>Манифест исходных файлов не указан. Смотрите происхождение у объектов в JSON.</span>}</div>}
           {!loadedScenario && <>
           <fieldset className="mode-options"><legend>Цель планирования</legend>
             <label className={`mode-card ${mode === "city" ? "active" : ""}`}><input type="radio" name="mode" checked={mode === "city"} onChange={() => setMode("city")} /><span className="mode-text"><strong>Для города</strong><small>Максимальная доступность зарядки</small></span><span className="mode-check">{mode === "city" && <Check size={15} />}</span></label>
@@ -245,7 +281,7 @@ export default function Home() {
               <div className="metric-card"><span>Обслуженный спрос</span><strong>{rate}%</strong><small>Базовый сценарий · суммарно</small></div>
               <div className="metric-card"><span>Выбранные площадки</span><strong>{plan.selected.length}</strong><small>Строительство в {yearsLabel}</small></div>
               <div className="metric-card"><span>NPV · {primaryScenario}</span><strong>{money(plan.cashflow_rub[primaryScenario] || 0)} <em>млн ₽</em></strong><small>По заданным тарифам и затратам</small></div>
-              <div className="metric-card"><span>p95 ожидания</span><strong>{avgWait === null ? "—" : `${Math.round(avgWait)} мин`}</strong><small>Симуляция · {firstYear}</small></div>
+              <div className="metric-card"><span>p95 ожидания</span><strong>{avgWait === null ? "—" : `${Math.round(avgWait)} мин`}</strong><small>Симуляция · {firstYear} · {simulations.length} seed</small></div>
             </div>
             <div className="result-lower">
               <div className="detail-card"><div className="detail-title"><h3>Этапы строительства</h3><ChevronRight size={18} /></div>
@@ -276,6 +312,33 @@ export default function Home() {
               })}</div>
               <p className="detail-foot"><Info size={16} /> Эффект рассчитан повторной оптимизацией с исключением площадки.</p>
             </div>}
+            <div className="defense-grid">
+              <section className="detail-card defense-card" aria-labelledby="alternatives-title"><div className="detail-title"><h3 id="alternatives-title">Основной план и альтернативы</h3><span className="small-caption">один вход · {primaryScenario} · {firstYear}</span></div>
+                <div className="data-table-scroll" role="region" tabIndex={0} aria-label="Сравнение планов"><table className="data-table"><thead><tr><th scope="col">План</th><th scope="col">CAPEX всего</th><th scope="col">SimPy</th><th scope="col">Разрыв</th><th scope="col">Статус</th></tr></thead><tbody>{comparison.map((row) => {
+                  const validation = row.validation?.find((item) => item.scenario_id === primaryScenario && item.year === firstYear);
+                  const capex = row.optimization.investment_rub_by_year?.reduce((sum, item) => sum + item.rub, 0) ?? null;
+                  return <tr key={row.name}><th scope="row">{row.name}</th><td>{capex === null ? "—" : `${money(capex)} млн ₽`}</td><td>{validation ? `${precise(validation.simulated_service_fraction_mean * 100)}%` : "—"}</td><td>{validation ? `${precise(validation.service_gap_percentage_points)} п.п.` : "—"}</td><td>{solverStatus(row.optimization.status)}</td></tr>;
+                })}</tbody></table></div>
+                <p className="detail-foot"><Info size={16} /> SimPy — средняя доля отпущенной энергии по seed; разрыв показывает отличие MILP от симуляции. Статус относится только к заданной модели.</p>
+              </section>
+              <section className="detail-card defense-card" aria-labelledby="quality-title"><div className="detail-title"><h3 id="quality-title">Качество входа</h3><span className="small-caption">источник решения</span></div>
+                <p className="quality-callout">{result?.metadata?.input_quality?.demand_scope === "served_sessions_only" ? "История выполненных зарядок; скрытый необслуженный спрос неизвестен." : result?.metadata?.input_quality?.demand_scope === "scenario_assumptions" ? "Спрос задан предположениями, а не измерен." : "Данные смешанного происхождения; проверьте источник каждой записи."}</p>
+                <p className="quality-count">Записи спроса, площадок и узлов: {provenance.observed} наблюдаемых · {provenance.derived} вычисленных · {provenance.assumed} предположенных</p>
+                {Boolean(result?.metadata?.input_quality?.warnings?.length) && <ul className="quality-warnings">{result?.metadata?.input_quality?.warnings.map((warning) => <li key={warning}>{inputWarningLabel(warning)}</li>)}</ul>}
+                {result?.metadata?.input_sha256 && <p className="detail-foot">Вход SHA-256: <code>{result.metadata.input_sha256}</code></p>}
+              </section>
+            </div>
+            <div className="defense-grid">
+              <section className="detail-card defense-card" aria-labelledby="audit-title"><div className="detail-title"><h3 id="audit-title">Энергетический аудит</h3><span className="audit-status">{plan.verification?.passed ? "Ограничения соблюдены" : "Проверка не подтверждена"}</span></div>
+                <dl className="audit-metrics"><div><dt>Макс. ошибка баланса</dt><dd>{plan.verification?.max_hourly_energy_balance_error_kwh === undefined ? "—" : `${precise(plan.verification.max_hourly_energy_balance_error_kwh)} кВт·ч`}</dd></div><div><dt>Перегрузка узла</dt><dd>{plan.verification?.max_grid_node_overload_kw === undefined ? "—" : `${precise(plan.verification.max_grid_node_overload_kw)} кВт`}</dd></div><div><dt>Превышение бюджета</dt><dd>{plan.verification?.max_budget_overrun_rub === undefined ? "—" : `${precise(plan.verification.max_budget_overrun_rub)} ₽`}</dd></div></dl>
+                {auditRows.length > 0 && <div className="data-table-scroll" role="region" tabIndex={0} aria-label="Энергетический аудит по площадкам"><table className="data-table"><thead><tr><th scope="col">Площадка</th><th scope="col">Отпущено</th><th scope="col">Из сети</th><th scope="col">Пик сети</th></tr></thead><tbody>{auditRows.map((row) => <tr key={row.site_id}><th scope="row">{activeSpec.sites.find((site) => site.id === row.site_id)?.name || row.site_id}</th><td>{number(row.served_kwh)} кВт·ч</td><td>{number(row.grid_kwh)} кВт·ч</td><td>{precise(row.peak_grid_kw)} кВт</td></tr>)}</tbody></table></div>}
+                <p className="detail-foot"><Info size={16} /> Проверка мощности и баланса в модели; электрический AC-режим сети не рассчитывался.{plan.verification?.energy_audit_truncated ? " Детальный аудит сокращён." : ""}</p>
+              </section>
+              <section className="detail-card defense-card" aria-labelledby="daily-title"><div className="detail-title"><h3 id="daily-title">Работа сети по дням</h3><span className="small-caption">SimPy · среднее по {operationalRuns.length} seed</span></div>
+                {dayRows.length ? <div className="data-table-scroll" role="region" tabIndex={0} aria-label="Посуточная работа сети"><table className="data-table"><thead><tr><th scope="col">День</th><th scope="col">Прибытия</th><th scope="col">Отпущено</th><th scope="col">Из сети</th><th scope="col">Очередь на границе</th></tr></thead><tbody>{dayRows.map((row) => <tr key={row.day}><th scope="row">{row.day}</th><td>{precise(row.arrivals)}</td><td>{precise(row.delivered)} кВт·ч</td><td>{precise(row.grid)} кВт·ч</td><td>{precise(row.queue)}</td></tr>)}</tbody></table></div> : <p className="quality-callout">Посуточная симуляция для этого результата недоступна.</p>}
+                <p className="detail-foot"><Info size={16} /> Один повторяющийся суточный профиль спроса; это модельная проверка, не фактическая история года.</p>
+              </section>
+            </div>
           </section> : !runId && <section className="empty-result"><span className="empty-icon"><Zap size={24} /></span><div><h2>План ещё не рассчитан</h2><p>Задайте цель и бюджет. Система сравнит доступные площадки и ограничения сети.</p></div><ArrowRight size={21} /></section>}
         </div>
       </div>
