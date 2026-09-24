@@ -3,244 +3,198 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>EV Infrastructure — концепт интерфейса</title>
+  <meta name="color-scheme" content="light dark">
+  <title>EV Infrastructure — мобильный концепт</title>
   <style>
     :root {
-      color-scheme: dark;
-      --bg: #0d1013;
-      --rail: #101417;
-      --panel: #151a1e;
-      --panel-soft: #181e22;
-      --map: #1c2327;
-      --border: #293239;
-      --border-strong: #3e4a51;
-      --text: #f1f4f4;
-      --muted: #a6b0b5;
-      --subtle: #88959b;
-      --cyan: #60d9df;
-      --cyan-soft: #193b40;
-      --white-soft: #dce4e5;
+      --black: #101010;
+      --white: #ffffff;
+      --paper: #f6f6f5;
+      --map: #e9e9e6;
+      --line: #e4e4e2;
+      --text: #151515;
+      --muted: #5c5c5b;
+      --quiet: #767674;
       --radius: 14px;
-      --radius-sm: 9px;
-      --space: 8px;
       font-family: Inter, "Segoe UI", Arial, sans-serif;
     }
     * { box-sizing: border-box; }
-    html { min-width: 320px; }
-    body { margin: 0; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+    html, body { margin: 0; min-width: 320px; }
+    body { background: var(--black); color: var(--white); -webkit-font-smoothing: antialiased; }
     button { font: inherit; cursor: pointer; }
-    button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
-    .app { min-height: 100vh; display: grid; grid-template-columns: 238px minmax(0, 1fr); }
-    .rail { display: flex; flex-direction: column; min-height: 100vh; border-right: 1px solid var(--border); background: var(--rail); padding: 28px 15px 22px; }
-    .brand { display: flex; align-items: center; gap: 12px; padding: 0 11px 30px; border-bottom: 1px solid var(--border); }
-    .brand img { width: 40px; height: 40px; object-fit: cover; border-radius: 9px; }
-    .brand-copy { min-width: 0; }
-    .brand-name { font-size: 14px; line-height: 1.1; font-weight: 700; letter-spacing: -.025em; white-space: nowrap; }
-    .brand-kind { margin-top: 5px; color: var(--subtle); font-size: 9px; font-weight: 700; letter-spacing: .18em; }
-    .nav-label { margin: 31px 13px 10px; color: var(--subtle); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
-    .nav-item { display: flex; align-items: center; gap: 12px; min-height: 43px; padding: 0 14px; border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--muted); font-size: 13px; }
-    .nav-item svg { width: 17px; height: 17px; flex: none; stroke-width: 1.65; }
-    .nav-item.active { color: var(--text); background: #20292d; border-color: #34444a; font-weight: 650; }
-    .nav-item.active svg { color: var(--cyan); }
-    .rail-spacer { flex: 1; }
-    .rail-bottom { border-top: 1px solid var(--border); padding: 18px 12px 0; }
-    .rail-bottom strong { display: block; font-size: 12px; font-weight: 620; }
-    .rail-bottom span { display: block; margin-top: 6px; color: var(--subtle); font-size: 11px; line-height: 1.5; }
-    .content { min-width: 0; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 64px; padding: 0 39px; border-bottom: 1px solid var(--border); }
-    .breadcrumbs { display: flex; align-items: center; gap: 10px; color: var(--subtle); font-size: 11px; white-space: nowrap; }
-    .breadcrumbs strong { color: var(--white-soft); font-weight: 600; }
-    .topbar-right { display: flex; align-items: center; gap: 11px; color: var(--muted); font-size: 11px; }
-    .quiet-dot { width: 7px; height: 7px; background: var(--cyan); border-radius: 50%; }
-    .topbar-badge { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--white-soft); font-size: 10px; font-weight: 700; letter-spacing: .09em; }
-    main { max-width: 1810px; margin: 0 auto; padding: 37px 39px 22px; }
-    .intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 25px; }
-    .eyebrow { color: var(--cyan); font-size: 10px; font-weight: 720; letter-spacing: .16em; text-transform: uppercase; }
-    h1 { margin: 9px 0 8px; font-size: clamp(30px, 2.05vw, 42px); font-weight: 660; letter-spacing: -.052em; line-height: 1.08; }
-    .intro p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
-    .intro-side { display: flex; align-items: center; gap: 14px; margin-top: 24px; white-space: nowrap; }
-    .scenario-id { color: var(--muted); font-size: 12px; }
-    .scenario-id strong { display: block; margin-top: 5px; color: var(--text); font-size: 13px; font-weight: 620; }
-    .action { min-height: 40px; padding: 0 15px; border: 1px solid #e4eeee; border-radius: 8px; background: #e8f0f0; color: #172024; font-size: 12px; font-weight: 700; }
-    .action:hover { background: #fff; }
-    .disclaimer { display: flex; align-items: center; gap: 9px; width: fit-content; margin: 22px 0 19px; padding: 7px 10px; border: 1px solid #475157; border-radius: 6px; color: var(--white-soft); background: #20282c; font-size: 10px; letter-spacing: .015em; }
-    .disclaimer svg { width: 14px; height: 14px; flex: none; color: var(--cyan); }
-    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-    .metric { min-height: 121px; padding: 20px 21px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
-    .metric-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--muted); font-size: 11px; }
-    .metric-top svg { width: 16px; height: 16px; color: #8fa9ae; stroke-width: 1.6; }
-    .metric-value { display: block; margin-top: 17px; font-size: clamp(26px, 1.75vw, 35px); font-weight: 640; letter-spacing: -.055em; line-height: 1; }
-    .metric-value small { font-size: .58em; font-weight: 500; letter-spacing: -.01em; color: var(--white-soft); }
-    .metric-foot { margin-top: 9px; color: var(--subtle); font-size: 10px; }
-    .workspace { display: grid; grid-template-columns: minmax(0, 1.78fr) minmax(350px, .72fr); gap: 14px; margin-top: 17px; }
-    .panel { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
-    .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; min-height: 60px; padding: 0 20px; border-bottom: 1px solid var(--border); }
-    .panel-title { display: flex; align-items: center; gap: 11px; }
-    .panel-title h2 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: -.015em; }
-    .panel-title span { color: var(--subtle); font-size: 10px; }
-    .year-pill { padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--white-soft); font-size: 10px; }
-    .map-wrap { position: relative; height: 492px; overflow: hidden; background: var(--map); }
-    .map-svg { position: absolute; width: 100%; height: 100%; }
-    .map-svg .district { fill: #273035; stroke: #333e43; stroke-width: 1; }
-    .map-svg .water { fill: none; stroke: #283e43; stroke-width: 47; stroke-linecap: round; }
-    .map-svg .road-main { fill: none; stroke: #515c60; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
-    .map-svg .road-secondary { fill: none; stroke: #394449; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
-    .map-svg .road-local { fill: none; stroke: #303b40; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .map-svg text { fill: #829196; font-size: 11px; letter-spacing: .22em; font-weight: 700; }
-    .map-shade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, #1c232700, #1c23271c 70%, #1c232740); }
-    .map-toolbar { position: absolute; top: 15px; left: 16px; display: flex; align-items: center; gap: 6px; padding: 4px; border: 1px solid #455158; border-radius: 8px; background: #161d21ed; }
-    .layer-button { min-height: 31px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 10px; }
-    .layer-button[aria-pressed="true"] { color: #162326; background: #dce9e9; font-weight: 700; }
-    .map-corner { position: absolute; right: 17px; top: 17px; padding: 8px 9px; border: 1px solid #455158; border-radius: 6px; background: #161d21ed; color: #d0dadb; font-size: 10px; letter-spacing: .04em; }
-    .station { position: absolute; z-index: 2; display: grid; place-items: center; width: 23px; height: 23px; transform: translate(-50%, -50%); border: 1.5px solid #9bdde0; border-radius: 50%; background: #1b3b40; box-shadow: 0 0 0 5px #60d9df20; }
-    .station:after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #c9f7f7; }
-    .station.existing { border-color: #c4d0d1; background: #1b2327; box-shadow: none; }
-    .station.existing:after { background: #c4d0d1; }
-    .station.selected { width: 32px; height: 32px; border: 2px solid #e4ffff; background: #39858c; box-shadow: 0 0 0 9px #60d9df26; }
-    .station.selected:after { width: 8px; height: 8px; background: white; }
-    .demand { position: absolute; z-index: 1; width: 39px; height: 39px; transform: translate(-50%,-50%); border-radius: 50%; background: #a7b5b522; border: 1px dashed #a7b5b588; }
-    .map-wrap:not(.show-demand) > .demand { display: none; }
-    .grid-node { position: absolute; width: 11px; height: 11px; transform: translate(-50%,-50%) rotate(45deg); border: 1px solid #d0d8d8; background: #334044; }
-    .map-wrap:not(.show-grid) > .grid-node { display: none; }
-    .map-callout { position: absolute; z-index: 3; left: 54%; top: 24%; min-width: 228px; padding: 15px 16px; border: 1px solid #53666a; border-radius: 10px; background: #10191deb; box-shadow: 0 16px 30px #0005; }
-    .map-callout::before { content: ""; position: absolute; left: -43px; bottom: 18px; width: 41px; height: 1px; background: #8dbfc1; transform: rotate(18deg); transform-origin: right center; }
-    .callout-kicker { color: var(--cyan); font-size: 9px; font-weight: 700; letter-spacing: .14em; }
-    .callout-title { margin-top: 8px; font-size: 16px; font-weight: 650; }
-    .callout-details { margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.5; }
-    .map-legend { position: absolute; left: 16px; bottom: 15px; display: flex; align-items: center; gap: 16px; padding: 10px 12px; border: 1px solid #455158; border-radius: 7px; background: #161d21ed; color: var(--white-soft); font-size: 10px; }
-    .legend-item { display: flex; align-items: center; gap: 7px; }
-    .legend-dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid #baf6f8; background: #438e94; }
-    .legend-dot.empty { border-color: #b7c4c6; background: transparent; }
-    .legend-dot.demand { position: static; display: block; transform: none; width: 9px; height: 9px; border: 1px solid #9ba9ac; background: #88959744; }
-    .map-caption { position: absolute; right: 18px; bottom: 18px; color: #c2d0d0; font-size: 9px; letter-spacing: .07em; }
-    .side-panel { display: flex; flex-direction: column; }
-    .side-body { padding: 22px 22px 19px; }
-    .detail-eyebrow { color: var(--subtle); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-    .mode-line { display: flex; justify-content: space-between; align-items: center; margin: 15px 0 24px; }
-    .mode-line strong { font-size: 16px; font-weight: 640; }
-    .mode-line span { padding: 6px 9px; border: 1px solid #3b5a5f; border-radius: 5px; background: var(--cyan-soft); color: #bee8e9; font-size: 10px; }
-    .facts { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; row-gap: 13px; font-size: 11px; }
-    .facts dt { color: var(--muted); }
-    .facts dd { margin: 0; color: var(--text); text-align: right; font-weight: 610; }
-    .separator { height: 1px; margin: 22px 0; background: var(--border); }
-    .mini-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-    .mini-title strong { font-size: 12px; font-weight: 630; }
-    .mini-title span { color: var(--subtle); font-size: 10px; }
-    .timeline { display: flex; align-items: flex-end; justify-content: space-between; gap: 9px; height: 68px; margin-top: 16px; }
-    .timeline-step { flex: 1; display: grid; justify-items: center; gap: 7px; color: var(--subtle); font-size: 10px; }
-    .timeline-step i { width: 100%; max-width: 58px; height: var(--h); border: 1px solid #5e777c; border-radius: 3px 3px 0 0; background: #466d72; }
-    .timeline-step:first-child i { background: #2b393d; border-color: #526065; }
-    .validation { display: flex; gap: 11px; align-items: flex-start; margin-top: auto; padding: 17px 21px 19px; border-top: 1px solid var(--border); background: var(--panel-soft); }
-    .validation svg { width: 17px; height: 17px; flex: none; color: var(--cyan); }
-    .validation strong { display: block; color: var(--white-soft); font-size: 11px; font-weight: 650; }
-    .validation span { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; line-height: 1.45; }
-    .footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 15px; color: var(--subtle); font-size: 10px; }
-    .footer strong { color: var(--white-soft); font-weight: 600; }
-    @media (max-width: 1260px) {
-      .app { grid-template-columns: 72px minmax(0, 1fr); }
-      .brand { padding-inline: 0; justify-content: center; }
-      .brand-copy, .nav-label, .nav-item span, .rail-bottom { display: none; }
-      .nav-item { justify-content: center; padding: 0; }
-      main { padding: 28px; }
-      .topbar { padding-inline: 28px; }
-      .workspace { grid-template-columns: minmax(0, 1.6fr) minmax(300px, .8fr); }
-      .map-wrap { height: 430px; }
+    button:focus-visible { outline: 3px solid #737373; outline-offset: 3px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .stage { display: grid; grid-template-columns: minmax(360px, 510px) max-content; align-items: center; justify-content: center; gap: clamp(45px, 5vw, 105px); min-height: 100vh; max-width: 1900px; margin: auto; padding: 48px 58px; }
+    .stage-copy { align-self: stretch; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+    .brand-line { display: flex; align-items: center; gap: 14px; color: var(--white); font-size: 14px; font-weight: 680; letter-spacing: -.02em; }
+    .brand-line img { width: 46px; height: 46px; border: 1px solid #777; border-radius: 10px; filter: grayscale(1); }
+    .brand-line small { display: block; margin-top: 4px; color: #aaa; font-size: 9px; font-weight: 650; letter-spacing: .17em; }
+    .stage-copy h2 { max-width: 550px; margin: 56px 0 23px; font-size: clamp(44px, 3.4vw, 68px); font-weight: 620; letter-spacing: -.064em; line-height: 1.08; }
+    .stage-copy p { max-width: 465px; margin: 0; color: #b9b9b9; font-size: 18px; line-height: 1.55; }
+    .stage-rule { width: 62px; height: 2px; margin-top: 52px; background: #f1f1f1; }
+    .stage-note { margin-top: 16px; color: #a9a9a9; font-size: 12px; line-height: 1.5; }
+    .phones { display: flex; align-items: center; gap: 31px; }
+    .phone { position: relative; width: 388px; height: 858px; flex: none; overflow: hidden; border: 8px solid #2d2d2d; border-radius: 48px; background: var(--white); color: var(--text); box-shadow: 0 28px 75px #0008; }
+    .phone::after { content: ""; position: absolute; z-index: 10; top: 9px; left: 50%; width: 91px; height: 18px; transform: translateX(-50%); border-radius: 0 0 12px 12px; background: #2d2d2d; pointer-events: none; }
+    .screen { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 39px; background: var(--white); }
+    .statusbar { position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 4px 22px 0; color: var(--text); font-size: 11px; font-weight: 730; }
+    .status-icons { display: flex; align-items: center; gap: 5px; }
+    .status-icons svg { width: 16px; height: 13px; }
+    .appbar { position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-between; height: 58px; padding: 0 21px; background: var(--white); }
+    .appbar-title { font-size: 18px; font-weight: 730; letter-spacing: -.04em; }
+    .appbar-right { color: var(--muted); font-size: 11px; font-weight: 600; }
+    .back-button { display: grid; place-items: center; width: 32px; height: 32px; margin-left: -7px; border: 0; border-radius: 50%; background: transparent; color: var(--text); }
+    .back-button svg { width: 21px; height: 21px; }
+    .appbar-plan { justify-content: flex-start; gap: 5px; }
+    .appbar-plan .appbar-right { margin-left: auto; }
+    .map-area { position: absolute; top: 90px; right: 0; bottom: 67px; left: 0; overflow: hidden; background: var(--map); }
+    .map-drawing { width: 100%; height: 100%; }
+    .map-drawing .block { fill: #eeeeec; stroke: #dfdfdc; stroke-width: 1; }
+    .map-drawing .park { fill: #dedfda; }
+    .map-drawing .road-major-outline { fill: none; stroke: #d3d4d1; stroke-width: 20; stroke-linecap: round; stroke-linejoin: round; }
+    .map-drawing .road-major { fill: none; stroke: #fafaf8; stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
+    .map-drawing .road-minor { fill: none; stroke: #fbfbfa; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+    .map-drawing text { fill: #858580; font-size: 10px; font-weight: 650; letter-spacing: .15em; }
+    .map-search { position: absolute; z-index: 3; top: 15px; left: 15px; right: 15px; display: flex; align-items: center; gap: 12px; height: 51px; padding: 0 14px; border: 1px solid #dededb; border-radius: 11px; background: var(--white); box-shadow: 0 6px 16px #0001; }
+    .map-search svg { width: 19px; height: 19px; flex: none; }
+    .map-search strong { display: block; font-size: 12px; font-weight: 680; }
+    .map-search span { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .map-search .chevron { margin-left: auto; color: var(--muted); font-size: 19px; }
+    .map-type { position: absolute; top: 82px; left: 15px; padding: 7px 9px; border: 1px solid #dededb; border-radius: 7px; background: #ffffffed; color: #3f3f3f; font-size: 10px; font-weight: 650; }
+    .layer-button { position: absolute; top: 82px; right: 15px; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #dededb; border-radius: 8px; background: var(--white); color: var(--black); box-shadow: 0 4px 12px #0001; }
+    .layer-button[aria-pressed="true"] { background: var(--black); color: var(--white); }
+    .layer-button svg { width: 17px; height: 17px; }
+    .pin { position: absolute; z-index: 1; display: grid; place-items: center; width: 25px; height: 25px; transform: translate(-50%, -50%); border: 2px solid var(--black); border-radius: 50%; background: var(--white); }
+    .pin::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--black); }
+    .pin.new { background: var(--black); }
+    .pin.new::after { background: var(--white); }
+    .pin.chosen { z-index: 2; width: 37px; height: 37px; border: 3px solid var(--white); background: var(--black); box-shadow: 0 0 0 4px var(--black), 0 5px 14px #0003; }
+    .pin.chosen::after { width: 9px; height: 9px; background: var(--white); }
+    .demand-ring { position: absolute; display: none; width: 85px; height: 85px; transform: translate(-50%, -50%); border: 2px dashed #777; border-radius: 50%; background: #1111110f; }
+    .map-area.demand-on .demand-ring { display: block; }
+    .pin-label { position: absolute; z-index: 2; top: 45%; left: 53%; padding: 8px 10px; border: 1px solid #dadad8; border-radius: 7px; background: var(--white); box-shadow: 0 4px 12px #0002; color: var(--text); font-size: 10px; font-weight: 690; }
+    .map-sheet { position: absolute; z-index: 4; right: 0; bottom: 67px; left: 0; height: 293px; padding: 9px 20px 17px; border-radius: 23px 23px 0 0; background: var(--white); box-shadow: 0 -9px 26px #0002; }
+    .sheet-handle { width: 30px; height: 4px; margin: 0 auto 15px; border-radius: 999px; background: #d5d5d5; }
+    .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .sheet-head h2 { margin: 0; font-size: 21px; font-weight: 730; letter-spacing: -.045em; }
+    .sheet-head p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
+    .year-badge { padding: 7px 8px; border-radius: 6px; background: #f1f1f0; color: var(--text); font-size: 10px; font-weight: 690; white-space: nowrap; }
+    .sheet-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 16px 0 11px; padding: 12px 0 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .sheet-metrics > div + div { padding-left: 18px; border-left: 1px solid var(--line); }
+    .sheet-metrics strong { display: block; font-size: 28px; line-height: 1; font-weight: 730; letter-spacing: -.065em; }
+    .sheet-metrics span { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; }
+    .budget { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 13px; color: var(--muted); font-size: 11px; }
+    .budget strong { color: var(--text); font-size: 11px; font-weight: 670; }
+    .main-button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 46px; padding: 0 16px; border: 1px solid var(--black); border-radius: 8px; background: var(--black); color: var(--white); font-size: 13px; font-weight: 700; }
+    .main-button:hover { background: #333; }
+    .main-button span:last-child { font-size: 20px; font-weight: 400; line-height: 1; }
+    .sheet-note { margin: 8px 0 0; color: var(--quiet); font-size: 9px; text-align: center; }
+    .tabbar { position: absolute; z-index: 5; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: 1fr 1fr; height: 67px; border-top: 1px solid var(--line); background: var(--white); }
+    .tab { display: grid; justify-items: center; align-content: center; gap: 4px; border: 0; background: transparent; color: var(--quiet); font-size: 10px; }
+    .tab[aria-current="page"] { color: var(--black); font-weight: 720; }
+    .tab svg { width: 18px; height: 18px; stroke-width: 1.8; }
+    .plan-body { position: absolute; top: 90px; right: 0; bottom: 67px; left: 0; overflow-y: auto; padding: 18px 20px 20px; background: var(--white); }
+    .overline { color: var(--muted); font-size: 10px; font-weight: 710; letter-spacing: .13em; text-transform: uppercase; }
+    .plan-body h2 { margin: 9px 0 4px; font-size: 27px; font-weight: 750; letter-spacing: -.058em; }
+    .plan-body .lead { margin: 0 0 18px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .plan-hero { display: flex; justify-content: space-between; align-items: flex-end; min-height: 118px; padding: 18px; border-radius: 12px; background: var(--black); color: var(--white); }
+    .plan-hero span { display: block; max-width: 135px; color: #c4c4c4; font-size: 11px; line-height: 1.4; }
+    .plan-hero strong { display: block; margin-top: 11px; font-size: 38px; line-height: .9; font-weight: 740; letter-spacing: -.07em; }
+    .plan-hero small { align-self: flex-start; color: #bbb; font-size: 10px; }
+    .plan-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 20px; }
+    .plan-fact { min-height: 80px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+    .plan-fact strong { display: block; font-size: 20px; font-weight: 740; letter-spacing: -.045em; }
+    .plan-fact span { display: block; margin-top: 7px; color: var(--muted); font-size: 10px; }
+    .section-heading { margin: 0 0 12px; font-size: 14px; font-weight: 720; letter-spacing: -.025em; }
+    .timeline { margin-left: 7px; border-left: 1px solid #c8c8c6; }
+    .time-row { position: relative; display: grid; grid-template-columns: 65px 1fr; gap: 3px; min-height: 61px; margin-left: 15px; }
+    .time-row::before { content: ""; position: absolute; top: 3px; left: -20px; width: 9px; height: 9px; border: 2px solid var(--black); border-radius: 50%; background: var(--white); }
+    .time-row:last-child { min-height: 45px; }
+    .time-row .year { font-size: 11px; font-weight: 730; }
+    .time-row strong { display: block; font-size: 11px; font-weight: 690; }
+    .time-row span { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+    .check-card { display: flex; align-items: flex-start; gap: 12px; margin-top: 10px; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+    .check-card svg { width: 18px; height: 18px; flex: none; }
+    .check-card strong { display: block; font-size: 11px; font-weight: 700; }
+    .check-card span { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .plan-disclaimer { margin: 12px 0 0; color: var(--quiet); font-size: 9px; line-height: 1.4; }
+    @media (max-width: 1500px) {
+      .stage { grid-template-columns: minmax(280px, 390px) max-content; gap: 32px; padding-inline: 25px; }
+      .phones { gap: 16px; }
+      .phone { width: 354px; height: 820px; }
+      .map-sheet { height: 293px; }
+      .stage-copy h2 { font-size: 48px; }
     }
-    @media (max-width: 850px) {
-      .app { display: block; }
-      .rail { display: none; }
-      .intro { display: block; }
-      .intro-side { margin-top: 19px; }
-      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .workspace { grid-template-columns: 1fr; }
-      .map-wrap { height: 410px; }
+    @media (max-width: 1170px) {
+      .stage { display: block; padding: 40px 20px; }
+      .stage-copy { max-width: 780px; margin: 0 auto 30px; text-align: center; }
+      .stage-copy .brand-line { justify-content: center; }
+      .stage-copy h2 { max-width: none; margin: 22px 0 9px; font-size: 42px; }
+      .stage-copy p { max-width: none; }
+      .stage-rule, .stage-note { display: none; }
+      .phones { justify-content: center; }
     }
-    @media (max-width: 520px) {
-      .topbar { padding-inline: 17px; }
-      .topbar-right { display: none; }
-      main { padding: 22px 15px; }
-      .intro p { font-size: 12px; }
-      .metric { padding: 16px; min-height: 112px; }
-      .map-callout { min-width: 160px; left: 48%; top: 24%; padding: 10px; }
-      .map-callout::before { display: none; }
-      .map-legend { right: 10px; left: 10px; justify-content: center; gap: 9px; }
-      .map-caption { display: none; }
-      .footer { display: block; line-height: 1.5; }
-      .footer span { display: block; }
-      .footer span + span { margin-top: 6px; }
+    @media (max-width: 740px) {
+      body { background: var(--white); }
+      .stage { min-height: 100dvh; margin: 0; padding: 0; }
+      .stage-copy { display: none; }
+      .phones { display: block; }
+      .phone { width: 100%; height: 100dvh; min-height: 620px; border: 0; border-radius: 0; box-shadow: none; }
+      .phone::after { display: none; }
+      .screen { border-radius: 0; }
+      .plan-phone { display: none; }
+      .stage[data-view="plan"] .map-phone { display: none; }
+      .stage[data-view="plan"] .plan-phone { display: block; }
+    }
+    @media (max-height: 770px) and (max-width: 740px) {
+      .map-sheet { height: 266px; padding-top: 7px; }
+      .sheet-handle { margin-bottom: 10px; }
+      .sheet-metrics { margin-block: 10px 8px; padding-block: 8px; }
+      .budget { margin-bottom: 8px; }
+      .plan-body { padding-top: 12px; }
     }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
   </style>
 </head>
 <body>
-  <div class="app">
-    <aside class="rail" aria-label="Разделы продукта">
-      <div class="brand"><img src="../../frontend/public/brand-logo.png" alt=""><div class="brand-copy"><div class="brand-name">EV Infrastructure</div><div class="brand-kind">PLANNING SYSTEM</div></div></div>
-      <div class="nav-label">Рабочее пространство</div>
-      <div class="nav-item active" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg><span>Обзор</span></div>
-      <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15m6-12v15"/></svg><span>Территория</span></div>
-      <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 18V5m0 13h16M7 14l4-5 4 3 5-7"/></svg><span>Данные и спрос</span></div>
-      <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l5 3"/></svg><span>Сценарии</span></div>
-      <div class="nav-label">Результат</div>
-      <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 4h14v16H5zM8 15l3-4 3 2 3-5"/></svg><span>Планы развития</span></div>
-      <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19V6m5 13V3m5 16v-8m5 8V8"/></svg><span>Сравнение</span></div>
-      <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 3h10l4 4v14H5zM15 3v5h4M8 12h8M8 16h8"/></svg><span>Отчёты</span></div>
-      <div class="rail-spacer"></div>
-      <div class="rail-bottom"><strong>Инженерный подход</strong><span>Происхождение данных, ограничения и результаты проверки остаются видимыми.</span></div>
-    </aside>
-    <div class="content">
-      <header class="topbar"><div class="breadcrumbs"><span>Рабочее пространство</span><span aria-hidden="true">/</span><span>Пилотный сценарий</span><span aria-hidden="true">/</span><strong>Обзор</strong></div><div class="topbar-right"><span class="quiet-dot" aria-hidden="true"></span><span>Локальный демонстрационный контур</span><span class="topbar-badge">КОНЦЕПТ</span></div></header>
-      <main>
-        <div class="intro"><div><div class="eyebrow">Планирование зарядной инфраструктуры</div><h1>План развития сети</h1><p>Площадки, мощность подключения, инвестиции и проверка работы во времени.</p></div><div class="intro-side"><div class="scenario-id">Активный сценарий<strong>Город · базовый</strong></div><button class="action" id="demo-action" type="button">Смотреть план&nbsp; ↗</button></div></div>
-        <div class="disclaimer" role="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 10v6m0-9h.01"/></svg>Визуальный концепт · карта и показатели условные, не результаты реального расчёта</div>
-        <section class="metrics" aria-label="Иллюстративные показатели">
-          <div class="metric"><div class="metric-top"><span>Обслуженный спрос</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 18h16M5 15l4-5 4 2 6-7"/></svg></div><strong class="metric-value">91,4 <small>%</small></strong><div class="metric-foot">оценка по сценарию</div></div>
-          <div class="metric"><div class="metric-top"><span>Доступность зарядки</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><strong class="metric-value">14 <small>мин</small></strong><div class="metric-foot">дорожное время до площадки</div></div>
-          <div class="metric"><div class="metric-top"><span>Инвестиции</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 5h16v14H4zM4 9h16M7 15h5"/></svg></div><strong class="metric-value">148 <small>млн ₽</small></strong><div class="metric-foot">горизонт 2026–2030</div></div>
-          <div class="metric"><div class="metric-top"><span>Ожидание зарядки</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M3 12h13M3 18h9"/></svg></div><strong class="metric-value">8,2 <small>мин</small></strong><div class="metric-foot">95-й процентиль · симуляция</div></div>
+  <main class="stage" id="stage" data-view="map">
+    <h1 class="sr-only">EV Infrastructure — планирование зарядной инфраструктуры</h1>
+    <div class="stage-copy"><div class="brand-line"><img src="../../frontend/public/brand-logo.png" alt=""><div>EV Infrastructure<small>PLANNING SYSTEM</small></div></div><h2>План сети.<br>Ясное решение.</h2><p>Где строить станции, как обеспечить их энергией и что изменится при росте спроса.</p><div class="stage-rule"></div><div class="stage-note">Мобильный концепт интерфейса. Карта и показатели условные.</div></div>
+    <div class="phones">
+      <div class="phone map-phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="status-icons" aria-hidden="true"><svg viewBox="0 0 16 13" fill="currentColor"><path d="M1 11h2V9H1zm4 0h2V7H5zm4 0h2V4H9zm4 0h2V1h-2z"/></svg><svg viewBox="0 0 16 13" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="12" height="9" rx="2"/><path d="M15 5v3"/></svg></span></div>
+        <header class="appbar"><strong class="appbar-title">Карта сети</strong><span class="appbar-right">Демо-сценарий</span></header>
+        <section class="map-area" id="map-area" aria-label="Схематическая карта территории">
+          <svg class="map-drawing" viewBox="0 0 390 690" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="390" height="690" fill="#e9e9e6"/><path class="block" d="M0 0h129l22 101-76 105H0zM143 0h139l-42 108-77 28zM293 0h97v189l-112-41zM0 220l83-4 98-69 78 95-29 108-151 33L0 336zM266 158l124 41v155l-118 5-34-112zM0 397l98-12 109-17 35 119-87 89L0 535zM262 375l128-6v151l-105-6-58-79zM0 554l160 31 89-77 141 25v157H0z"/><path class="park" d="M0 399 111 391 96 526 0 506zM264 35l126 22v113l-90-18z"/><path class="road-minor" d="M55-20 97 211 161 405 152 716M229-20 222 200 191 354 265 712M335-20 289 178 311 405 324 714M0 136 187 175 390 174M0 292 189 268 390 312M0 472 208 449 390 453M0 603 223 565 390 608M9 0 157 138 387 231M0 227 181 393 390 554"/><path class="road-major-outline" d="M-20 369c98 4 144-87 222-102 89-17 133 53 211 43M87-25c7 125 98 171 127 273 34 118-33 153 4 252 20 55 66 99 102 215"/><path class="road-major" d="M-20 369c98 4 144-87 222-102 89-17 133 53 211 43M87-25c7 125 98 171 127 273 34 118-33 153 4 252 20 55 66 99 102 215"/><text x="158" y="208">ЦЕНТР</text><text x="46" y="459">ЗАПАД</text><text x="286" y="396">ВОСТОК</text></svg>
+          <div class="map-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 22s7-5.4 7-12a7 7 0 0 0-14 0c0 6.6 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><div><strong>Пилотная территория</strong><span>Планирование 2026–2030</span></div><span class="chevron" aria-hidden="true">⌄</span></div>
+          <span class="map-type">СХЕМА ТЕРРИТОРИИ</span><button class="layer-button" id="layer-button" type="button" aria-label="Показать зоны спроса" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 9 9-5 9 5-9 5-9-5zm0 5 9 5 9-5M3 11.5l9 5 9-5"/></svg></button>
+          <div class="demand-ring" style="left:26%;top:35%"></div><div class="demand-ring" style="left:68%;top:39%"></div><div class="demand-ring" style="left:46%;top:57%"></div>
+          <span class="pin" style="left:23%;top:32%"></span><span class="pin" style="left:80%;top:30%"></span><span class="pin new" style="left:31%;top:54%"></span><span class="pin new" style="left:72%;top:57%"></span><span class="pin chosen" style="left:52%;top:37%"></span><span class="pin-label">Узел 07 · 4 поста</span>
         </section>
-        <div class="workspace">
-          <section class="panel" aria-labelledby="map-heading"><div class="panel-header"><div class="panel-title"><h2 id="map-heading">География решений</h2><span>· площадки и дорожная доступность</span></div><span class="year-pill">2026 — 2030</span></div>
-            <div class="map-wrap" id="map-wrap">
-              <svg class="map-svg" viewBox="0 0 1100 540" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-                <rect width="1100" height="540" fill="#1c2327"/>
-                <path class="district" d="M0 0h251l49 83-50 73-99 39-151-5zM260 0h283l8 72-121 62-140-28zM564 0h261l-35 94-143 83-96-61zM838 0h262v176l-159 42-129-94zM0 210l156 11 87-48 118 66-20 142-171 25L0 350zM374 178l167-72 129 89-31 150-198 31-88-93zM701 186l132-71 267 99v145l-222 30-218-74zM0 374l185 50 180-20 65 136H0zM445 396l192-42 135 63-40 123H461zM789 405l311-29v164H765z"/>
-                <path class="water" d="M72 -30C153 74 143 124 239 180S388 253 400 353s83 126 91 213"/>
-                <path class="road-local" d="M60 44l229 142 118 130 306 175M173 0l127 170-4 208 107 162M320-20l133 104 15 129 103 52 6 276M616-20l-70 132 79 81 45 156-70 212M748-22L649 91l125 93 48 143 102 213M965-20l-56 178 71 154 74 228M0 120l382 48 364 50 354-64M-20 284l382-2 322 61 416-22M-20 459l388-39 331 18 401-38"/>
-                <path class="road-secondary" d="M21 515 256 386 364 279 617 201 919 96M69 34l322 74 208 96 305 78 233 196M214-20l84 217 134 67 239 65 277 211M-10 158l315 85 197-18 279-122 319-34"/>
-                <path class="road-main" d="M-20 348c154 4 255-100 378-119 163-26 236 46 335 48 146 4 240-108 427-99M130-24c151 107 215 169 284 277 73 112 174 155 245 298M-20 484c172-107 325-126 486-104 161 23 284 26 398-60 106-80 194-98 256-108"/>
-                <text x="422" y="80">СЕВЕРНЫЙ</text><text x="732" y="160">ВОСТОЧНЫЙ</text><text x="472" y="310">ЦЕНТР</text><text x="143" y="470">ЗАПАДНЫЙ</text><text x="837" y="472">ЮЖНЫЙ</text>
-              </svg>
-              <div class="map-shade"></div>
-              <div class="demand" style="left:23%;top:34%"></div><div class="demand" style="left:39%;top:57%"></div><div class="demand" style="left:67%;top:65%"></div><div class="demand" style="left:77%;top:39%"></div>
-              <div class="grid-node" style="left:32%;top:25%"></div><div class="grid-node" style="left:73%;top:53%"></div><div class="grid-node" style="left:53%;top:77%"></div>
-              <div class="station existing" style="left:28%;top:24%"></div><div class="station" style="left:34%;top:65%"></div><div class="station existing" style="left:64%;top:27%"></div><div class="station" style="left:77%;top:65%"></div><div class="station" style="left:87%;top:42%"></div><div class="station selected" style="left:48%;top:45%"></div>
-              <div class="map-toolbar" role="group" aria-label="Слой схемы"><button type="button" class="layer-button" data-layer="stations" aria-pressed="true">Станции</button><button type="button" class="layer-button" data-layer="demand" aria-pressed="false">Спрос</button><button type="button" class="layer-button" data-layer="grid" aria-pressed="false">Сеть</button></div>
-              <div class="map-corner">СХЕМА ТЕРРИТОРИИ</div>
-              <div class="map-callout"><div class="callout-kicker">ПЛОЩАДКА · 07</div><div class="callout-title">Транспортный узел</div><div class="callout-details">4 поста DC · 320 кВт<br>Ввод в сценарии: 2027</div></div>
-              <div class="map-legend"><div class="legend-item"><i class="legend-dot"></i>Выбрана в плане</div><div class="legend-item"><i class="legend-dot empty"></i>Действующая сеть</div><div class="legend-item"><i class="legend-dot demand"></i>Зона спроса</div></div>
-              <div class="map-caption">СХЕМАТИЧЕСКАЯ ВИЗУАЛИЗАЦИЯ</div>
-            </div>
-          </section>
-          <section class="panel side-panel" aria-labelledby="scenario-heading"><div class="panel-header"><div class="panel-title"><h2 id="scenario-heading">Параметры плана</h2></div><span class="year-pill">v 01</span></div><div class="side-body"><div class="detail-eyebrow">Цель расчёта</div><div class="mode-line"><strong>Доступность для города</strong><span>ГОРОД</span></div><dl class="facts"><dt>Территория</dt><dd>Пилотная зона</dd><dt>Горизонт</dt><dd>2026–2030</dd><dt>Предельный бюджет</dt><dd>150 млн ₽</dd><dt>Ограничения сети</dt><dd>Учитываются</dd><dt>Сценарий отказа</dt><dd>1 станция</dd></dl><div class="separator"></div><div class="mini-title"><strong>Инвестиции по этапам</strong><span>условные значения</span></div><div class="timeline" aria-label="Иллюстративный график инвестиций"><div class="timeline-step" style="--h:20px"><i></i><span>2026</span></div><div class="timeline-step" style="--h:44px"><i></i><span>2027</span></div><div class="timeline-step" style="--h:35px"><i></i><span>2028</span></div><div class="timeline-step" style="--h:25px"><i></i><span>2029</span></div><div class="timeline-step" style="--h:16px"><i></i><span>2030</span></div></div></div><div class="validation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg><div><strong>Расчёт + эксплуатационная проверка</strong><span>В рабочем продукте сценарии сравниваются по одинаковым ограничениям и качеству данных.</span></div></div></section>
-        </div>
-        <div class="footer"><span><strong>EV Infrastructure</strong> · концепт для проморолика, не скриншот рабочего результата</span><span>Подставьте фактические результаты перед публикацией</span></div>
-      </main>
+        <section class="map-sheet" aria-labelledby="sheet-title"><div class="sheet-handle" aria-hidden="true"></div><div class="sheet-head"><div><h2 id="sheet-title">План сети</h2><p>Доступность зарядки для города</p></div><span class="year-badge">2026–2030</span></div><div class="sheet-metrics"><div><strong>8</strong><span>площадок в плане</span></div><div><strong>91,4%</strong><span>обслуженный спрос</span></div></div><div class="budget"><span>Инвестиции</span><strong>148 млн ₽ / 150 млн ₽</strong></div><button type="button" class="main-button" data-open-plan><span>Посмотреть план</span><span aria-hidden="true">→</span></button><p class="sheet-note">Иллюстративные значения · не реальный расчёт</p></section>
+        <nav class="tabbar" aria-label="Основные разделы"><button type="button" class="tab" data-view-target="map" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15m6-12v15"/></svg>Карта</button><button type="button" class="tab" data-view-target="plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 5h16v14H4zM7 15l4-4 3 2 3-5"/></svg>План</button></nav>
+      </div></div>
+      <div class="phone plan-phone"><div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="status-icons" aria-hidden="true"><svg viewBox="0 0 16 13" fill="currentColor"><path d="M1 11h2V9H1zm4 0h2V7H5zm4 0h2V4H9zm4 0h2V1h-2z"/></svg><svg viewBox="0 0 16 13" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="12" height="9" rx="2"/><path d="M15 5v3"/></svg></span></div>
+        <header class="appbar appbar-plan"><button class="back-button" type="button" data-view-target="map" aria-label="Назад к карте"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m15 5-7 7 7 7"/></svg></button><strong class="appbar-title">План развития</strong><span class="appbar-right">2026–2030</span></header>
+        <section class="plan-body" aria-labelledby="plan-result-heading"><div class="overline">Город · базовый сценарий</div><h2 id="plan-result-heading">Рекомендованный план</h2><p class="lead">Результат размещения и отдельной проверки работы сети.</p><div class="plan-hero"><div><span>Обслуженный спрос в сценарии</span><strong>91,4%</strong></div><small>ДЕМО</small></div><div class="plan-facts"><div class="plan-fact"><strong>8,2 мин</strong><span>ожидание · p95</span></div><div class="plan-fact"><strong>148 млн ₽</strong><span>инвестиции</span></div></div><h3 class="section-heading">Этапы реализации</h3><div class="timeline"><div class="time-row"><span class="year">2026</span><div><strong>Опорная сеть</strong><span>Учёт существующих площадок</span></div></div><div class="time-row"><span class="year">2027</span><div><strong>Новые зарядные посты</strong><span>Расширение с учётом подключения</span></div></div><div class="time-row"><span class="year">2028–30</span><div><strong>Следующие очереди</strong><span>Пересмотр по данным спроса</span></div></div></div><div class="check-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg><div><strong>Проверка эксплуатации</strong><span>Очереди, ограничения мощности и устойчивость к отказу.</span></div></div><p class="plan-disclaimer">Все значения и этапы на этом экране иллюстративные.</p></section>
+        <nav class="tabbar" aria-label="Основные разделы"><button type="button" class="tab" data-view-target="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15m6-12v15"/></svg>Карта</button><button type="button" class="tab" data-view-target="plan" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 5h16v14H4zM7 15l4-4 3 2 3-5"/></svg>План</button></nav>
+      </div></div>
     </div>
-  </div>
+  </main>
   <script>
-    const map = document.getElementById('map-wrap');
-    for (const button of document.querySelectorAll('.layer-button')) {
-      button.addEventListener('click', () => {
-        for (const item of document.querySelectorAll('.layer-button')) item.setAttribute('aria-pressed', String(item === button));
-        map.classList.toggle('show-demand', button.dataset.layer === 'demand');
-        map.classList.toggle('show-grid', button.dataset.layer === 'grid');
-      });
-    }
-    document.getElementById('demo-action').addEventListener('click', () => {
-      document.getElementById('map-heading').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    const stage = document.getElementById('stage');
+    const setView = view => {
+      stage.dataset.view = view;
+      if (window.matchMedia('(max-width: 740px)').matches) {
+        const next = view === 'plan' ? document.querySelector('.plan-phone .back-button') : document.querySelector('.map-phone .main-button');
+        next.focus({ preventScroll: true });
+      }
+    };
+    document.querySelectorAll('[data-view-target]').forEach(button => button.addEventListener('click', () => setView(button.dataset.viewTarget)));
+    document.querySelectorAll('[data-open-plan]').forEach(button => button.addEventListener('click', () => setView('plan')));
+    const layer = document.getElementById('layer-button');
+    layer.addEventListener('click', () => { const enabled = layer.getAttribute('aria-pressed') !== 'true'; layer.setAttribute('aria-pressed', String(enabled)); document.getElementById('map-area').classList.toggle('demand-on', enabled); });
   </script>
 </body>
 </html>
