@@ -2,6 +2,7 @@ package geoimport
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -84,11 +85,16 @@ func TestImportValidAndAtomicFailure(t *testing.T) {
 	bad := `{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[37.6,55.7]}},{"type":"Feature","geometry":{"type":"Point","coordinates":[200,55.7]}}]}`
 	badName := name + " bad"
 	_, err = Import(context.Background(), db, strings.NewReader(bad), Metadata{Name: badName, Source: "test", Kind: "assumed"})
-	if err == nil {
-		t.Fatal("invalid coordinate accepted")
+	if !errors.Is(err, ErrInvalidGeoJSON) {
+		t.Fatalf("invalid coordinate was not classified as bad input: %v", err)
 	}
 	err = db.QueryRow(context.Background(), `SELECT count(*) FROM dataset_versions WHERE name=$1`, badName).Scan(&count)
 	if err != nil || count != 0 {
 		t.Fatalf("failed import was not atomic: %d %v", count, err)
+	}
+	malformed := `{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":"bad"}}]}`
+	_, err = Import(context.Background(), db, strings.NewReader(malformed), Metadata{Name: badName + " malformed", Source: "test", Kind: "assumed"})
+	if !errors.Is(err, ErrInvalidGeoJSON) {
+		t.Fatalf("malformed PostGIS geometry was not classified as invalid input: %v", err)
 	}
 }

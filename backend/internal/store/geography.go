@@ -3,11 +3,29 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 
 	"github.com/Elmar006/energy_web/backend/internal/geography"
+	"github.com/Elmar006/energy_web/backend/internal/geoimport"
 )
 
 type Dataset = geography.Dataset
+
+func (s *Store) ImportDataset(ctx context.Context, reader io.Reader, meta geography.ImportMetadata) (geography.ImportResult, error) {
+	result, err := geoimport.Import(ctx, s.DB, reader, geoimport.Metadata{
+		Name: meta.Name, Kind: meta.Kind, Source: meta.Source,
+		License: meta.License, CapturedAt: meta.CapturedAt})
+	if err != nil {
+		if errors.Is(err, geoimport.ErrInvalidGeoJSON) {
+			return geography.ImportResult{}, fmt.Errorf("%w: %v", geography.ErrInvalidImport, err)
+		}
+		return geography.ImportResult{}, err
+	}
+	return geography.ImportResult{DatasetID: result.DatasetID,
+		Features: result.Features, SHA256: result.SHA256}, nil
+}
 
 func (s *Store) Datasets(ctx context.Context) ([]Dataset, error) {
 	rows, err := s.DB.Query(ctx, `SELECT id::text,name,kind,source,license,checksum,captured_at,created_at

@@ -16,9 +16,10 @@ docker compose up -d --build
 
 ```bash
 python scripts/smoke.py
+python scripts/smoke_dataset_builder.py
 ```
 
-Smoke-тест создаёт тестовые сценарии и задачи в локальной БД, подтверждает идемпотентность запуска, расчёт, симуляцию, объяснения, коридор, парк и вход через production-сборку фронтенда.
+Первый smoke-тест подтверждает идемпотентность запуска, расчёт, симуляцию, объяснения, коридор, парк и вход через production-сборку фронтенда. Второй загружает четыре синтетических GeoJSON через API, собирает по UUID версий сценарий и доводит его до результата worker. Оба создают тестовые сценарии и задачи в локальной БД.
 
 Тесты отдельно:
 
@@ -36,9 +37,10 @@ cd frontend && npm ci && npm run lint && npm run typecheck && npm run build
 cd backend
 DATABASE_URL='postgres://energy:energy_dev@localhost:55432/energy?sslmode=disable' \
   go run ./cmd/import-geojson -file /path/data.geojson -name 'Название' \
-  -kind observed -source 'URL или описание' -license 'Условия использования'
+  -kind observed -source 'URL или описание' -license 'Условия использования' \
+  -captured-at '2026-09-24T12:00:00Z'
 ```
 
-Файл должен быть `FeatureCollection` в WGS84 с корректными координатами. `properties.feature_type` задаёт класс объекта; если его нет, класс будет `unclassified`. Импорт формирует версию набора и SHA-256 исходного файла. Ошибочная геометрия откатывает импорт целиком. Данные читаются через `/api/v1/datasets`, `/api/v1/map?bbox=west,south,east,north` и `/api/v1/tiles/{z}/{x}/{y}`.
+По умолчанию CLI помечает импорт как `assumed`; `observed` указывайте только для заявленной поставщиком наблюдаемой выгрузки. Файл должен быть `FeatureCollection` в WGS84 с корректными координатами. `properties.feature_type` задаёт класс объекта; если его нет, класс будет `unclassified`. Импорт формирует версию набора и SHA-256 исходного файла. Ошибочная геометрия откатывает импорт целиком. Те же данные можно загрузить по `POST /api/v1/datasets/import`, затем выбрать версии и собрать сценарий; схема полей и пример — в [DATASET_SCENARIOS.md](DATASET_SCENARIOS.md). Данные читаются через `/api/v1/datasets`, `/api/v1/map?bbox=west,south,east,north` и `/api/v1/tiles/{z}/{x}/{y}`.
 
-`docker compose down` останавливает сервисы, сохраняя volume PostgreSQL. Миграция `001_init.sql` применяется только при первом создании volume; для существующей БД при изменении схемы потребуется отдельный мигратор. Резервное копирование и восстановление для production пока не автоматизированы.
+`docker compose down` останавливает сервисы, сохраняя volume PostgreSQL. Одноразовый сервис `migrate` применяет номерные миграции к новой и существующей БД перед запуском API/worker. Резервное копирование и восстановление для production пока не автоматизированы.

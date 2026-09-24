@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 class FiniteModel(BaseModel):
-    model_config = ConfigDict(allow_inf_nan=False)
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
 
 
 class Provenance(FiniteModel):
@@ -16,10 +17,11 @@ class Provenance(FiniteModel):
 
 class DatasetReference(FiniteModel):
     name: str = Field(min_length=1)
-    role: Literal["demand_sessions", "candidate_sites", "grid", "tariff", "routing", "other"]
+    role: Literal["demand_sessions", "demand_zones", "candidate_sites", "grid", "tariff", "routing", "planning_assumptions", "other"]
     kind: Literal["observed", "derived", "assumed"]
     source: str = Field(min_length=1)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    version_id: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
     license: str | None = None
     captured_at: str | None = None
 
@@ -139,6 +141,7 @@ class Parameters(FiniteModel):
 
 class PlanningInput(FiniteModel):
     id: str = Field(min_length=1)
+    time_zone: str | None = None
     zones: list[Zone]
     sites: list[Site]
     options: list[ChargerOption]
@@ -152,6 +155,11 @@ class PlanningInput(FiniteModel):
 
     @model_validator(mode="after")
     def references(self):
+        if self.time_zone is not None:
+            try:
+                ZoneInfo(self.time_zone)
+            except (ZoneInfoNotFoundError, ValueError) as error:
+                raise ValueError("time_zone must be a valid IANA zone") from error
         zones = {z.id for z in self.zones}
         sites = {s.id for s in self.sites}
         opts = {o.id for o in self.options}

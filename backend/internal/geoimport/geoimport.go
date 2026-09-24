@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -28,6 +29,8 @@ type Result struct {
 	SHA256    string
 }
 
+var ErrInvalidGeoJSON = errors.New("invalid GeoJSON dataset")
+
 type collection struct {
 	Type     string `json:"type"`
 	Features []struct {
@@ -40,7 +43,7 @@ type collection struct {
 
 func Import(ctx context.Context, db *pgxpool.Pool, reader io.Reader, meta Metadata) (Result, error) {
 	if meta.Name == "" || meta.Source == "" || (meta.Kind != "observed" && meta.Kind != "derived" && meta.Kind != "assumed") {
-		return Result{}, errors.New("name, source, and valid kind are required")
+		return Result{}, fmt.Errorf("%w: name, source, and valid kind are required", ErrInvalidGeoJSON)
 	}
 	if meta.CapturedAt != nil {
 		// PostgreSQL timestamptz stores microseconds. Use the same instant for
@@ -53,14 +56,14 @@ func Import(ctx context.Context, db *pgxpool.Pool, reader io.Reader, meta Metada
 		return Result{}, err
 	}
 	if len(raw) == 50<<20 {
-		return Result{}, errors.New("GeoJSON exceeds 50 MiB")
+		return Result{}, fmt.Errorf("%w: GeoJSON exceeds 50 MiB", ErrInvalidGeoJSON)
 	}
 	var input collection
 	if err = json.Unmarshal(raw, &input); err != nil {
-		return Result{}, err
+		return Result{}, fmt.Errorf("%w: %v", ErrInvalidGeoJSON, err)
 	}
-	if input.Type != "FeatureCollection" || len(input.Features) == 0 {
-		return Result{}, errors.New("nonempty FeatureCollection required")
+	if input.Type != "FeatureCollection" || len(input.Features) == 0 || len(input.Features) > 10000 {
+		return Result{}, fmt.Errorf("%w: FeatureCollection must contain 1..10000 features", ErrInvalidGeoJSON)
 	}
 	sum := sha256.Sum256(raw)
 	out := Result{SHA256: hex.EncodeToString(sum[:])}
@@ -100,7 +103,7 @@ func Import(ctx context.Context, db *pgxpool.Pool, reader io.Reader, meta Metada
 	}
 	for i, feature := range input.Features {
 		if feature.Type != "Feature" || !json.Valid(feature.Geometry) || string(feature.Geometry) == "null" {
-			return Result{}, fmt.Errorf("invalid feature %d", i)
+			return Result{}, fmt.Errorf("%w: invalid feature %d", ErrInvalidGeoJSON, i)
 		}
 		properties := feature.Properties
 		if properties == nil {
@@ -126,10 +129,14 @@ func Import(ctx context.Context, db *pgxpool.Pool, reader io.Reader, meta Metada
               AND ST_YMin(ST_SetSRID(ST_GeomFromGeoJSON($5),4326))>=-90
               AND ST_YMax(ST_SetSRID(ST_GeomFromGeoJSON($5),4326))<=90`, out.DatasetID, kind, external, props, feature.Geometry)
 		if err != nil {
+			var pgError *pgconn.PgError
+			if errors.As(err, &pgError) && (pgError.Code == "XX000" || len(pgError.Code) >= 2 && pgError.Code[:2] == "22") {
+				return Result{}, fmt.Errorf("%w: feature %d geometry: %s", ErrInvalidGeoJSON, i, pgError.Message)
+			}
 			return Result{}, fmt.Errorf("feature %d: %w", i, err)
 		}
 		if tag.RowsAffected() != 1 {
-			return Result{}, fmt.Errorf("feature %d has invalid geometry or coordinates", i)
+			return Result{}, fmt.Errorf("%w: feature %d has invalid geometry or coordinates", ErrInvalidGeoJSON, i)
 		}
 		out.Features++
 	}

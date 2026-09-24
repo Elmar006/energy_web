@@ -5,10 +5,69 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Elmar006/energy_web/backend/internal/cache"
 	"github.com/Elmar006/energy_web/backend/internal/geography"
 )
+
+func (s Server) importDataset(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 52<<20)
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			fail(w, 413, "upload_too_large", "multipart upload exceeds 52 MiB")
+		} else {
+			fail(w, 400, "invalid_multipart", "multipart/form-data with a GeoJSON file is required")
+		}
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+	allowedFields := map[string]bool{"name": true, "kind": true, "source": true,
+		"license": true, "captured_at": true}
+	for field, values := range r.MultipartForm.Value {
+		if !allowedFields[field] || len(values) != 1 {
+			fail(w, 422, "invalid_dataset", "unexpected or repeated metadata field")
+			return
+		}
+	}
+	if len(r.MultipartForm.File) != 1 {
+		fail(w, 422, "invalid_dataset", "unexpected file field")
+		return
+	}
+	if len(r.MultipartForm.File["file"]) != 1 {
+		fail(w, 422, "invalid_dataset", "exactly one GeoJSON file is required")
+		return
+	}
+	input, _, err := r.FormFile("file")
+	if err != nil {
+		fail(w, 422, "invalid_dataset", "GeoJSON file is required")
+		return
+	}
+	defer input.Close()
+	meta := geography.ImportMetadata{
+		Name: r.FormValue("name"), Kind: r.FormValue("kind"),
+		Source: r.FormValue("source"), License: r.FormValue("license"),
+	}
+	if stamp := r.FormValue("captured_at"); stamp != "" {
+		instant, err := time.Parse(time.RFC3339Nano, stamp)
+		if err != nil {
+			fail(w, 422, "invalid_dataset", "captured_at must be RFC3339")
+			return
+		}
+		meta.CapturedAt = &instant
+	}
+	result, err := (geography.ImportService{Repository: s.Store}).Import(r.Context(), input, meta)
+	if errors.Is(err, geography.ErrInvalidImport) {
+		fail(w, 422, "invalid_dataset", err.Error())
+		return
+	}
+	if err != nil {
+		fail(w, 500, "database_error", "unable to import dataset")
+		return
+	}
+	writeJSON(w, 201, result)
+}
 
 func (s Server) geography() geography.Service {
 	service := geography.Service{Repository: s.Store}
