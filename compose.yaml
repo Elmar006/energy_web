@@ -42,6 +42,15 @@ services:
     ports:
       - "127.0.0.1:5000:5000"
 
+  migrate:
+    build: ./backend
+    entrypoint: ["/migrate"]
+    environment:
+      DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:-energy_dev}@db:5432/energy?sslmode=disable
+    depends_on:
+      db: {condition: service_healthy}
+    restart: "no"
+
   api:
     build: ./backend
     environment:
@@ -51,7 +60,7 @@ services:
       REDIS_ADDR: redis:6379
       ENGINE_URL: http://engine:8090
     depends_on:
-      db: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
       engine: {condition: service_healthy}
     ports:
@@ -64,7 +73,7 @@ services:
       DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:-energy_dev}@db:5432/energy?sslmode=disable
       ENGINE_URL: http://engine:8090
     depends_on:
-      db: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
       engine: {condition: service_healthy}
 
   frontend:

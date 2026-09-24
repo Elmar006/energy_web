@@ -33,8 +33,35 @@ def test_no_grid_capacity_requires_upgrade(small_input):
     small_input.grid_nodes[0].upgrade_capex_rub = 500
     result = solve(small_input)
     assert result.status == "optimal", result.diagnostic
-    assert result.grid_upgrades == [{"grid_node_id": "g1", "year": 2027}]
+    assert result.grid_upgrades == [{"grid_node_id": "g1", "year": 2027, "commissioned_year": 2027}]
     assert result.served_kwh["base"] == 10
+
+
+def test_grid_upgrade_lead_time_delays_capacity_but_not_capex(small_input):
+    raw = small_input.model_dump()
+    raw["parameters"].update({"years": [2027, 2028],
+                              "annual_budgets_rub": [1500, 0], "total_budget_rub": 1500})
+    raw["scenarios"][0]["demand_multiplier"] = [1, 1]
+    raw["grid_nodes"][0].update({"headroom_kw": [0] * 24, "upgrade_kw": 10,
+                                  "upgrade_capex_rub": 500, "upgrade_lead_years": 1})
+    result = solve(PlanningInput.model_validate(raw))
+    assert result.status == "optimal", result.diagnostic
+    assert result.grid_upgrades == [{"grid_node_id": "g1", "year": 2027,
+                                     "commissioned_year": 2028}]
+    assert result.investment_rub_by_year == [{"year": 2027, "rub": 1500},
+                                              {"year": 2028, "rub": 0}]
+    assert result.served_kwh["base"] == 10
+    assert result.verification["passed"] is True
+
+
+def test_upgrade_cannot_be_purchased_if_commissioning_exceeds_horizon(small_input):
+    small_input.grid_nodes[0].headroom_kw = [0] * 24
+    small_input.grid_nodes[0].upgrade_kw = 10
+    small_input.grid_nodes[0].upgrade_lead_years = 1
+    result = solve(small_input)
+    assert result.status == "optimal", result.diagnostic
+    assert result.grid_upgrades == []
+    assert result.served_kwh["base"] == 0
 
 
 def test_operator_may_decline_unprofitable_station(small_input):
@@ -120,7 +147,7 @@ def test_two_sites_cannot_spend_shared_node_headroom_twice(small_input):
     upgraded = solve(PlanningInput.model_validate(raw))
     assert upgraded.status == "optimal", upgraded.diagnostic
     assert upgraded.served_kwh["base"] == 20
-    assert upgraded.grid_upgrades == [{"grid_node_id": "g1", "year": 2027}]
+    assert upgraded.grid_upgrades == [{"grid_node_id": "g1", "year": 2027, "commissioned_year": 2027}]
     assert upgraded.investment_rub_by_year == [{"year": 2027, "rub": 2500.0}]
     assert upgraded.verification["passed"] is True
 

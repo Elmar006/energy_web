@@ -181,6 +181,12 @@
             "title": "Upgrade Capex Rub",
             "type": "number"
           },
+          "upgrade_lead_years": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Upgrade Lead Years",
+            "type": "integer"
+          },
           "provenance": {
             "$ref": "#/components/schemas/Provenance"
           }
@@ -1314,13 +1320,17 @@
               "type": "object",
               "required": [
                 "grid_node_id",
-                "year"
+                "year",
+                "commissioned_year"
               ],
               "properties": {
                 "grid_node_id": {
                   "type": "string"
                 },
                 "year": {
+                  "type": "integer"
+                },
+                "commissioned_year": {
                   "type": "integer"
                 }
               }
@@ -1550,7 +1560,8 @@
           "name",
           "kind",
           "source",
-          "checksum"
+          "checksum",
+          "created_at"
         ],
         "properties": {
           "id": {
@@ -1579,6 +1590,17 @@
           },
           "checksum": {
             "type": "string"
+          },
+          "captured_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

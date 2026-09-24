@@ -10,6 +10,7 @@ from energy.contracts import PlanningInput
     [
         (("zones", 0, "hourly_kwh"), [-1] + [0] * 23, "hourly_kwh"),
         (("grid_nodes", 0, "headroom_kw"), [-1] + [0] * 23, "headroom_kw"),
+        (("grid_nodes", 0, "upgrade_lead_years"), -1, "upgrade_lead_years"),
         (("scenarios", 0, "demand_multiplier"), [-1], "demand_multiplier"),
         (("parameters", "annual_budgets_rub"), [-1], "annual_budgets_rub"),
         (("parameters", "years"), [2027, 2029], "years"),

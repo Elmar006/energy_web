@@ -10,6 +10,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -41,6 +42,12 @@ func Import(ctx context.Context, db *pgxpool.Pool, reader io.Reader, meta Metada
 	if meta.Name == "" || meta.Source == "" || (meta.Kind != "observed" && meta.Kind != "derived" && meta.Kind != "assumed") {
 		return Result{}, errors.New("name, source, and valid kind are required")
 	}
+	if meta.CapturedAt != nil {
+		// PostgreSQL timestamptz stores microseconds. Use the same instant for
+		// the idempotency lookup and INSERT even if the caller has nanoseconds.
+		instant := meta.CapturedAt.UTC().Truncate(time.Microsecond)
+		meta.CapturedAt = &instant
+	}
 	raw, err := io.ReadAll(io.LimitReader(reader, 50<<20))
 	if err != nil {
 		return Result{}, err
@@ -62,6 +69,30 @@ func Import(ctx context.Context, db *pgxpool.Pool, reader io.Reader, meta Metada
 		return Result{}, err
 	}
 	defer tx.Rollback(ctx)
+	// Serialize imports of the same immutable content. The exact lookup below
+	// handles hash-lock collisions and returns an existing version rather than
+	// inserting duplicate features on retries or concurrent CLI runs.
+	captured := ""
+	if meta.CapturedAt != nil {
+		captured = meta.CapturedAt.UTC().Format(time.RFC3339Nano)
+	}
+	lockKey := fmt.Sprintf("%q|%q|%q|%q|%q|%q", meta.Name, meta.Kind, meta.Source,
+		out.SHA256, meta.License, captured)
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, lockKey); err != nil {
+		return Result{}, err
+	}
+	err = tx.QueryRow(ctx, `SELECT d.id::text,count(f.id)
+		FROM dataset_versions d LEFT JOIN geographic_features f ON f.dataset_version_id=d.id
+		WHERE d.name=$1 AND d.kind=$2 AND d.source=$3 AND d.checksum=$4
+		  AND d.license=$5 AND d.captured_at IS NOT DISTINCT FROM $6
+		GROUP BY d.id,d.created_at ORDER BY d.created_at DESC,d.id DESC LIMIT 1`,
+		meta.Name, meta.Kind, meta.Source, out.SHA256, meta.License, meta.CapturedAt).Scan(&out.DatasetID, &out.Features)
+	if err == nil {
+		return out, tx.Commit(ctx)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return Result{}, err
+	}
 	err = tx.QueryRow(ctx, `INSERT INTO dataset_versions(id,name,kind,source,license,checksum,captured_at)
         VALUES(gen_random_uuid(),$1,$2,$3,$4,$5,$6) RETURNING id::text`, meta.Name, meta.Kind, meta.Source, meta.License, out.SHA256, meta.CapturedAt).Scan(&out.DatasetID)
 	if err != nil {

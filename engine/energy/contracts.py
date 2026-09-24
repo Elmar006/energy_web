@@ -57,6 +57,7 @@ class GridNode(FiniteModel):
     headroom_kw: list[float] = Field(min_length=24, max_length=24)
     upgrade_kw: float = Field(default=0, ge=0)
     upgrade_capex_rub: float = Field(default=0, ge=0)
+    upgrade_lead_years: int = Field(default=0, ge=0)
     provenance: Provenance
 
     @model_validator(mode="after")

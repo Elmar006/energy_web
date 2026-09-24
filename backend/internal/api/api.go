@@ -1,17 +1,18 @@
 package api
 
 import (
-	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Elmar006/energy_web/backend/internal/planning"
 	"github.com/Elmar006/energy_web/backend/internal/store"
 	"github.com/redis/go-redis/v9"
 )
@@ -21,6 +22,19 @@ type Server struct {
 	Token     string
 	Cache     *redis.Client
 	EngineURL string
+}
+
+func (s Server) scenarioQueries() planning.Queries { return planning.Queries{Repository: s.Store} }
+func (s Server) runs() planning.Runs               { return planning.Runs{Repository: s.Store} }
+
+var uuidPath = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+func validRunOrScenarioID(w http.ResponseWriter, id string) bool {
+	if uuidPath.MatchString(id) {
+		return true
+	}
+	fail(w, 422, "invalid_id", "id must be a UUID")
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -86,51 +100,18 @@ func (s Server) createScenario(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_json", "one object required")
 		return
 	}
-	if strings.TrimSpace(in.Name) == "" || len(in.Name) > 120 || !json.Valid(in.Spec) || string(in.Spec) == "null" {
-		fail(w, 422, "invalid_scenario", "name and JSON spec are required")
+	saved, err := (planning.Service{
+		Repository: s.Store,
+		Validator:  planning.HTTPValidator{URL: s.EngineURL},
+	}).CreateScenario(r.Context(), in.Name, in.Spec)
+	if errors.Is(err, planning.ErrInvalidScenario) {
+		fail(w, 422, "invalid_scenario", err.Error())
 		return
 	}
-	if s.EngineURL == "" {
-		fail(w, 503, "engine_unavailable", "input validator is not configured")
-		return
-	}
-	validationRequest, err := http.NewRequestWithContext(r.Context(), http.MethodPost,
-		strings.TrimRight(s.EngineURL, "/")+"/v1/validate", bytes.NewReader(in.Spec))
-	if err != nil {
-		fail(w, 500, "validation_error", "unable to prepare input validation")
-		return
-	}
-	validationRequest.Header.Set("Content-Type", "application/json")
-	validationResponse, err := (&http.Client{Timeout: 15 * time.Second}).Do(validationRequest)
-	if err != nil {
+	if errors.Is(err, planning.ErrValidatorUnavailable) {
 		fail(w, 503, "engine_unavailable", "input validator is unavailable")
 		return
 	}
-	defer validationResponse.Body.Close()
-	if validationResponse.StatusCode == http.StatusUnprocessableEntity {
-		var validation struct {
-			Detail []struct {
-				Loc []any  `json:"loc"`
-				Msg string `json:"msg"`
-			} `json:"detail"`
-		}
-		_ = json.NewDecoder(io.LimitReader(validationResponse.Body, 1<<16)).Decode(&validation)
-		detail := "scenario does not match the planning input contract"
-		if len(validation.Detail) > 0 {
-			parts := make([]string, 0, len(validation.Detail[0].Loc))
-			for _, part := range validation.Detail[0].Loc {
-				parts = append(parts, fmt.Sprint(part))
-			}
-			detail = strings.Join(parts, ".") + ": " + validation.Detail[0].Msg
-		}
-		fail(w, 422, "invalid_scenario", detail)
-		return
-	}
-	if validationResponse.StatusCode != http.StatusOK {
-		fail(w, 503, "validation_error", "input validator failed")
-		return
-	}
-	saved, err := s.Store.CreateScenario(r.Context(), in.Name, in.Spec)
 	if err != nil {
 		fail(w, 500, "database_error", "unable to create scenario")
 		return
@@ -139,7 +120,7 @@ func (s Server) createScenario(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) listScenarios(w http.ResponseWriter, r *http.Request) {
-	items, err := s.Store.ListScenarios(r.Context())
+	items, err := s.scenarioQueries().ListScenarios(r.Context())
 	if err != nil {
 		fail(w, 500, "database_error", "unable to list scenarios")
 		return
@@ -148,8 +129,11 @@ func (s Server) listScenarios(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) getScenario(w http.ResponseWriter, r *http.Request) {
-	out, err := s.Store.GetScenario(r.Context(), r.PathValue("id"))
-	if errors.Is(err, store.ErrNotFound) {
+	if !validRunOrScenarioID(w, r.PathValue("id")) {
+		return
+	}
+	out, err := s.scenarioQueries().GetScenario(r.Context(), r.PathValue("id"))
+	if errors.Is(err, planning.ErrNotFound) {
 		fail(w, 404, "not_found", "scenario not found")
 		return
 	}
@@ -161,21 +145,18 @@ func (s Server) getScenario(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) createRun(w http.ResponseWriter, r *http.Request) {
-	key := r.Header.Get("Idempotency-Key")
-	if len(key) < 8 || len(key) > 128 {
+	if !validRunOrScenarioID(w, r.PathValue("id")) {
+		return
+	}
+	out, err := s.runs().Start(r.Context(), r.PathValue("id"), r.Header.Get("Idempotency-Key"))
+	if errors.Is(err, planning.ErrInvalidKey) {
 		fail(w, 422, "invalid_key", "Idempotency-Key must be 8..128 characters")
 		return
 	}
-	id := r.PathValue("id")
-	if _, err := s.Store.GetScenario(r.Context(), id); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			fail(w, 404, "not_found", "scenario not found")
-		} else {
-			fail(w, 500, "database_error", "unable to load scenario")
-		}
+	if errors.Is(err, planning.ErrNotFound) {
+		fail(w, 404, "not_found", "scenario not found")
 		return
 	}
-	out, err := s.Store.CreateRun(r.Context(), id, key)
 	if err != nil {
 		fail(w, 500, "database_error", "unable to create run")
 		return
@@ -184,8 +165,11 @@ func (s Server) createRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) getRun(w http.ResponseWriter, r *http.Request) {
-	out, err := s.Store.GetRun(r.Context(), r.PathValue("id"))
-	if errors.Is(err, store.ErrNotFound) {
+	if !validRunOrScenarioID(w, r.PathValue("id")) {
+		return
+	}
+	out, err := s.runs().Get(r.Context(), r.PathValue("id"))
+	if errors.Is(err, planning.ErrNotFound) {
 		fail(w, 404, "not_found", "run not found")
 		return
 	}
@@ -197,21 +181,27 @@ func (s Server) getRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) cancelRun(w http.ResponseWriter, r *http.Request) {
-	ok, err := s.Store.Cancel(r.Context(), r.PathValue("id"))
-	if err != nil {
-		fail(w, 500, "database_error", "unable to cancel run")
+	if !validRunOrScenarioID(w, r.PathValue("id")) {
 		return
 	}
-	if !ok {
+	err := s.runs().Cancel(r.Context(), r.PathValue("id"))
+	if errors.Is(err, planning.ErrNotCancellable) {
 		fail(w, 409, "not_cancellable", "run was already completed or does not exist")
+		return
+	}
+	if err != nil {
+		fail(w, 500, "database_error", "unable to cancel run")
 		return
 	}
 	writeJSON(w, 200, map[string]string{"state": "cancelled"})
 }
 
 func (s Server) getResult(w http.ResponseWriter, r *http.Request) {
-	out, err := s.Store.Result(r.Context(), r.PathValue("id"))
-	if errors.Is(err, store.ErrNotFound) {
+	if !validRunOrScenarioID(w, r.PathValue("id")) {
+		return
+	}
+	out, err := s.runs().Result(r.Context(), r.PathValue("id"))
+	if errors.Is(err, planning.ErrNotFound) {
 		fail(w, 404, "not_found", "completed result not found")
 		return
 	}
@@ -224,8 +214,11 @@ func (s Server) getResult(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) events(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.Store.GetRun(r.Context(), r.PathValue("id")); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+	if !validRunOrScenarioID(w, r.PathValue("id")) {
+		return
+	}
+	if _, err := s.runs().Get(r.Context(), r.PathValue("id")); err != nil {
+		if errors.Is(err, planning.ErrNotFound) {
 			fail(w, 404, "not_found", "run not found")
 		} else {
 			fail(w, 500, "database_error", "unable to load run")
@@ -243,7 +236,7 @@ func (s Server) events(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		events, err := s.Store.Events(r.Context(), r.PathValue("id"), cursor)
+		events, err := s.runs().Events(r.Context(), r.PathValue("id"), cursor)
 		if err != nil {
 			return
 		}

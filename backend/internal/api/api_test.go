@@ -43,6 +43,9 @@ func TestAuthAndRequestValidation(t *testing.T) {
 		{"bad bbox", "/api/v1/map?bbox=37,55,36,56", "test-secret-token", 422},
 		{"nonfinite bbox", "/api/v1/map?bbox=NaN,55,38,56", "test-secret-token", 422},
 		{"bad tile", "/api/v1/tiles/9/999/160", "test-secret-token", 422},
+		{"bad scenario UUID", "/api/v1/scenarios/not-a-uuid", "test-secret-token", 422},
+		{"bad run UUID", "/api/v1/runs/not-a-uuid", "test-secret-token", 422},
+		{"bad result UUID", "/api/v1/runs/not-a-uuid/results", "test-secret-token", 422},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)

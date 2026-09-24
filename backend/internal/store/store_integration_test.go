@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"testing"
@@ -95,6 +97,24 @@ func TestListScenariosIncludesSavedSnapshot(t *testing.T) {
 		}
 	}
 	t.Fatal("saved scenario not found in listing")
+}
+
+func TestScenarioHashMatchesStoredJSONBSnapshot(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	saved, err := s.CreateScenario(ctx, "hash", json.RawMessage(` { "z": 1.00, "a": {"n": 2} } `))
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := s.GetScenario(ctx, saved.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(actual.Spec)
+	if actual.SHA256 != hex.EncodeToString(sum[:]) || saved.SHA256 != actual.SHA256 {
+		t.Fatalf("hash does not match stored snapshot: saved=%s, fetched=%s, spec=%s",
+			saved.SHA256, actual.SHA256, actual.Spec)
+	}
 }
 
 func TestCancellationRejectsFinish(t *testing.T) {

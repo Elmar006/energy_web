@@ -17,6 +17,8 @@ def test_public_openapi_contract_has_resolved_component_references():
     assert "partial_energy_kwh" in schemas["SimulationResult"]["properties"]
     assert schemas["OptimizationResult"]["properties"]["energy_audit"]["items"]["$ref"].endswith("/EnergyAudit")
     assert "max_hourly_energy_balance_error_kwh" in schemas["PhysicalVerification"]["properties"]
+    assert "upgrade_lead_years" in schemas["GridNode"]["properties"]
+    assert "commissioned_year" in schemas["OptimizationResult"]["properties"]["grid_upgrades"]["items"]["required"]
 
     def walk(value):
         if isinstance(value, dict):

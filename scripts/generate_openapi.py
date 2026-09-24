@@ -84,8 +84,9 @@ schemas = {
                 "required": ["site_id", "option_id", "year"], "properties": {
                     "site_id": {"type": "string"}, "option_id": {"type": "string"}, "year": {"type": "integer"}}}},
             "grid_upgrades": {"type": "array", "items": {"type": "object",
-                "required": ["grid_node_id", "year"], "properties": {
-                    "grid_node_id": {"type": "string"}, "year": {"type": "integer"}}}},
+                "required": ["grid_node_id", "year", "commissioned_year"], "properties": {
+                    "grid_node_id": {"type": "string"}, "year": {"type": "integer"},
+                    "commissioned_year": {"type": "integer"}}}},
             "battery": {"type": "array", "items": {"type": "object",
                 "required": ["site_id", "year", "kwh"], "properties": {
                     "site_id": {"type": "string"}, "year": {"type": "integer"}, "kwh": {"type": "number"}}}},
@@ -122,11 +123,13 @@ schemas = {
                                   "simulation": {"type": "array", "items": ref("SimulationResult")},
                                   "explanations": {"type": "array", "items": {"type": "object"}},
                                   "metadata": {"type": "object"}}},
-    "DatasetManifest": {"type": "object", "required": ["id", "name", "kind", "source", "checksum"],
+    "DatasetManifest": {"type": "object", "required": ["id", "name", "kind", "source", "checksum", "created_at"],
                         "properties": {"id": {"type": "string", "format": "uuid"},
                                        "name": {"type": "string"}, "kind": {"type": "string", "enum": ["observed", "derived", "assumed"]},
                                        "source": {"type": "string"}, "license": {"type": ["string", "null"]},
-                                       "checksum": {"type": "string"}}},
+                                       "checksum": {"type": "string"},
+                                       "captured_at": {"type": ["string", "null"], "format": "date-time"},
+                                       "created_at": {"type": "string", "format": "date-time"}}},
 }
 
 uuid_param = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}

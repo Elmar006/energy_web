@@ -85,7 +85,8 @@ def solve(spec: PlanningInput) -> SolveResult:
     active = lambda s, o, p: sum(m.Y[s, o, k] for k in periods if k <= p)
     battery = lambda s, p: sum(m.B[s, k] for k in periods if k <= p)
     solar = lambda s, p: sum(m.G[s, k] for k in periods if k <= p)
-    upgraded = lambda n, p: sum(m.U[n, k] for k in periods if k <= p)
+    upgraded = lambda n, p: sum(m.U[n, k] for k in periods
+                                if k + nodes[n].upgrade_lead_years <= p)
     installed = lambda s, p: sum(active(s, o, p) for o in sites[s].option_ids)
     station_load = lambda s, p, q, h: sum(m.X[z, s, p, q, h] for z, _ in edge_by_site[s])
 
@@ -107,8 +108,10 @@ def solve(spec: PlanningInput) -> SolveResult:
 
     for node in d.grid_nodes:
         m.C.add(sum(m.U[node.id, p] for p in periods) <= 1)
-        if node.upgrade_kw == 0:
-            for p in periods:
+        for p in periods:
+            # An investment that cannot enter service within the planning
+            # horizon cannot improve this model and must not appear in a plan.
+            if node.upgrade_kw == 0 or p + node.upgrade_lead_years >= np:
                 m.U[node.id, p].fix(0)
 
     def invest(p):
@@ -268,7 +271,9 @@ def solve(spec: PlanningInput) -> SolveResult:
             previous = tier_objective
             outcome = tier_outcome
     selected = [dict(site_id=s, option_id=o, year=par.years[p]) for s, o in site_options for p in periods if pyo.value(m.Y[s, o, p]) > 0.5]
-    upgrades = [dict(grid_node_id=n, year=par.years[p]) for n in nodes for p in periods if pyo.value(m.U[n, p]) > 0.5]
+    upgrades = [dict(grid_node_id=n, year=par.years[p],
+                     commissioned_year=par.years[p + nodes[n].upgrade_lead_years])
+                for n in nodes for p in periods if pyo.value(m.U[n, p]) > 0.5]
     batteries = [dict(site_id=s, year=par.years[p], kwh=round(pyo.value(m.B[s, p]), 4)) for s in sites for p in periods if pyo.value(m.B[s, p]) > 1e-6]
     pv = [dict(site_id=s, year=par.years[p], kw=round(pyo.value(m.G[s, p]), 4)) for s in sites for p in periods if pyo.value(m.G[s, p]) > 1e-6]
     served_raw = {q: pyo.value(served(q)) for q in scenarios}
