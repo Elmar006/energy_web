@@ -75,6 +75,12 @@ test("мобильный сценарий доступен от входа до 
   await expect(page.getByText("Расчёт завершён")).toBeVisible({ timeout: 150_000 });
   await expect(page.getByRole("heading", { name: "Этапы строительства" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Устойчивость к росту спроса" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Основной план и альтернативы" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Качество входа" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Энергетический аудит" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Работа сети по дням" })).toBeVisible();
+  await expect(page.getByText("Спрос задан предположениями, а не измерен.")).toBeVisible();
+  await expect(page.getByRole("table")).toHaveCount(3);
   await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   await page.getByRole("button", { name: "Выйти из рабочего пространства" }).click();
@@ -87,13 +93,35 @@ test("пользовательский JSON загружается, провер
   await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
   await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/import_sample.json"));
   await expect(page.locator(".intro-note strong")).toHaveText("import_sample");
-  await expect(page.getByText(/3 предположенных записей/)).toBeVisible();
+  await expect(page.locator(".source-quality")).toContainText("3 предположенных");
   await expect(page.getByText("1 кандидат")).toBeVisible();
   await page.getByRole("button", { name: "Рассчитать план" }).click();
   await expect(page.getByText("Расчёт завершён")).toBeVisible({ timeout: 150_000 });
   await expect(page.getByRole("listitem").getByText("Тестовая площадка · Казань")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("listitem").getByText("Тестовая площадка · Казань")).toBeVisible({ timeout: 30_000 });
+});
+
+test("закреплённый конкурсный кейс проходит от загрузки до проверяемого экрана", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_DEMO_PASSWORD ?? "demo-local-password");
+  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/commission_monaco.json"));
+  await expect(page.locator(".intro-note strong")).toHaveText("commission_monaco");
+  await page.getByRole("button", { name: "Рассчитать план" }).click();
+  await expect(page.getByText("Расчёт завершён")).toBeVisible({ timeout: 150_000 });
+  await expect(page.getByRole("heading", { name: "Основной план и альтернативы" })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Порог 50%/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Энергетический аудит" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Работа сети по дням" })).toBeVisible();
+  await expect(page.getByText("Спрос задан предположениями, а не измерен.")).toBeVisible();
+  await expect.poll(async () => page.locator("header img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  if (process.env.ENERGY_SCREENSHOT) {
+    await page.screenshot({ path: process.env.ENERGY_SCREENSHOT, fullPage: true });
+    await page.getByRole("heading", { name: "Основной план и альтернативы" }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: process.env.ENERGY_SCREENSHOT.replace(/\.png$/, "-detail.png") });
+  }
 });
 
 test("ограничение CVaR видно в результате, а несовместимые условия не выдаются за план", async ({ page }) => {

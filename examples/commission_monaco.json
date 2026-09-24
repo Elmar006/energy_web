@@ -1,0 +1,545 @@
+{
+  "id": "commission-monaco-mixed-2026-09-22",
+  "time_zone": "Europe/Monaco",
+  "zones": [
+    {
+      "id": "homes",
+      "name": "Сценарный спрос у Parking du centre commercial",
+      "latitude": 43.7308982,
+      "longitude": 7.4179212,
+      "group": "private",
+      "hourly_kwh": [
+        3.0,
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        4.0,
+        8.0,
+        15.0,
+        25.0,
+        24.0,
+        20.0,
+        23.0,
+        30.0,
+        32.0,
+        27.0,
+        28.0,
+        34.0,
+        45.0,
+        55.0,
+        58.0,
+        48.0,
+        32.0,
+        20.0,
+        9.0
+      ],
+      "mean_session_kwh": 35.0,
+      "arrival_profile": null,
+      "max_travel_minutes": 24.0,
+      "provenance": {
+        "source": "Спрос и профиль синтетические (examples/demo.json); только географический якорь OSM node/25239191 из https://download.geofabrik.de/europe/monaco-260922.osm.pbf",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    },
+    {
+      "id": "taxi",
+      "name": "Сценарный спрос у Metropole",
+      "latitude": 43.7413692,
+      "longitude": 7.4287882,
+      "group": "taxi",
+      "hourly_kwh": [
+        16.0,
+        14.0,
+        10.0,
+        9.0,
+        12.0,
+        17.0,
+        22.0,
+        28.0,
+        32.0,
+        30.0,
+        25.0,
+        30.0,
+        35.0,
+        32.0,
+        28.0,
+        30.0,
+        35.0,
+        42.0,
+        48.0,
+        50.0,
+        42.0,
+        31.0,
+        25.0,
+        20.0
+      ],
+      "mean_session_kwh": 40.0,
+      "arrival_profile": null,
+      "max_travel_minutes": 18.0,
+      "provenance": {
+        "source": "Спрос и профиль синтетические (examples/demo.json); только географический якорь OSM node/267898764 из https://download.geofabrik.de/europe/monaco-260922.osm.pbf",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    },
+    {
+      "id": "fleet",
+      "name": "Сценарный спрос у Parking des Carmes",
+      "latitude": 43.74819,
+      "longitude": 7.4347011,
+      "group": "fleet",
+      "hourly_kwh": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        3.0,
+        4.0,
+        2.0,
+        1.0,
+        1.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        6.0,
+        10.0,
+        14.0,
+        20.0,
+        22.0,
+        18.0,
+        12.0,
+        6.0,
+        2.0
+      ],
+      "mean_session_kwh": 45.0,
+      "arrival_profile": null,
+      "max_travel_minutes": 20.0,
+      "provenance": {
+        "source": "Спрос и профиль синтетические (examples/demo.json); только географический якорь OSM node/1880130278 из https://download.geofabrik.de/europe/monaco-260922.osm.pbf",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    }
+  ],
+  "sites": [
+    {
+      "id": "west",
+      "name": "Parking des Papalins",
+      "latitude": 43.7296158,
+      "longitude": 7.4173319,
+      "grid_node_id": "n-west",
+      "option_ids": [
+        "ac",
+        "dc60",
+        "dc150"
+      ],
+      "existing_option_id": null,
+      "earliest_period": 0,
+      "battery_max_kwh": 80.0,
+      "battery_capex_per_kwh_rub": 11000.0,
+      "pv_max_kw": 25.0,
+      "pv_capex_per_kw_rub": 64000.0,
+      "provenance": {
+        "source": "OSM node/1875160729 фиксирует только геопозицию и POI; оборудование, право строительства и подключение не подтверждены. https://download.geofabrik.de/europe/monaco-260922.osm.pbf",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    },
+    {
+      "id": "centre",
+      "name": "Зарядная станция OSM",
+      "latitude": 43.7418922,
+      "longitude": 7.4257828,
+      "grid_node_id": "n-centre",
+      "option_ids": [
+        "ac"
+      ],
+      "existing_option_id": "ac",
+      "earliest_period": 0,
+      "battery_max_kwh": 40.0,
+      "battery_capex_per_kwh_rub": 11000.0,
+      "pv_max_kw": 0.0,
+      "pv_capex_per_kw_rub": 0.0,
+      "provenance": {
+        "source": "OSM node/13302048342 фиксирует только геопозицию и POI; оборудование, право строительства и подключение не подтверждены. https://download.geofabrik.de/europe/monaco-260922.osm.pbf",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    },
+    {
+      "id": "east",
+      "name": "Parking du Larvotto",
+      "latitude": 43.747477,
+      "longitude": 7.4345387,
+      "grid_node_id": "n-east",
+      "option_ids": [
+        "ac",
+        "dc60",
+        "dc150"
+      ],
+      "existing_option_id": null,
+      "earliest_period": 0,
+      "battery_max_kwh": 80.0,
+      "battery_capex_per_kwh_rub": 11000.0,
+      "pv_max_kw": 25.0,
+      "pv_capex_per_kw_rub": 64000.0,
+      "provenance": {
+        "source": "OSM node/1079750865 фиксирует только геопозицию и POI; оборудование, право строительства и подключение не подтверждены. https://download.geofabrik.de/europe/monaco-260922.osm.pbf",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    },
+    {
+      "id": "south",
+      "name": "Parking du Chemin des Pêcheurs",
+      "latitude": 43.7312758,
+      "longitude": 7.4271083,
+      "grid_node_id": "n-centre",
+      "option_ids": [
+        "ac",
+        "dc60"
+      ],
+      "existing_option_id": null,
+      "earliest_period": 0,
+      "battery_max_kwh": 0.0,
+      "battery_capex_per_kwh_rub": 0.0,
+      "pv_max_kw": 0.0,
+      "pv_capex_per_kw_rub": 0.0,
+      "provenance": {
+        "source": "OSM node/25191432 фиксирует только геопозицию и POI; оборудование, право строительства и подключение не подтверждены. https://download.geofabrik.de/europe/monaco-260922.osm.pbf",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    }
+  ],
+  "options": [
+    {
+      "id": "ac",
+      "ports": 2,
+      "charger_kw": 22.0,
+      "connection_kw": 44.0,
+      "capex_rub": 1100000.0,
+      "annual_fixed_rub": 90000.0,
+      "allowed_groups": [
+        "private",
+        "fleet"
+      ]
+    },
+    {
+      "id": "dc60",
+      "ports": 2,
+      "charger_kw": 60.0,
+      "connection_kw": 120.0,
+      "capex_rub": 2600000.0,
+      "annual_fixed_rub": 180000.0,
+      "allowed_groups": [
+        "private",
+        "taxi",
+        "fleet"
+      ]
+    },
+    {
+      "id": "dc150",
+      "ports": 2,
+      "charger_kw": 150.0,
+      "connection_kw": 280.0,
+      "capex_rub": 5100000.0,
+      "annual_fixed_rub": 300000.0,
+      "allowed_groups": [
+        "private",
+        "taxi",
+        "fleet"
+      ]
+    }
+  ],
+  "grid_nodes": [
+    {
+      "id": "n-west",
+      "headroom_kw": [
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0,
+        105.0
+      ],
+      "upgrade_kw": 140.0,
+      "upgrade_capex_rub": 1500000.0,
+      "upgrade_lead_years": 0,
+      "provenance": {
+        "source": "Сценарные лимиты из examples/demo.json; сетевой организацией не подтверждены",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    },
+    {
+      "id": "n-centre",
+      "headroom_kw": [
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0,
+        85.0
+      ],
+      "upgrade_kw": 110.0,
+      "upgrade_capex_rub": 1300000.0,
+      "upgrade_lead_years": 0,
+      "provenance": {
+        "source": "Сценарные лимиты из examples/demo.json; сетевой организацией не подтверждены",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    },
+    {
+      "id": "n-east",
+      "headroom_kw": [
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0,
+        170.0
+      ],
+      "upgrade_kw": 100.0,
+      "upgrade_capex_rub": 1200000.0,
+      "upgrade_lead_years": 0,
+      "provenance": {
+        "source": "Сценарные лимиты из examples/demo.json; сетевой организацией не подтверждены",
+        "kind": "assumed",
+        "captured_at": null
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "базовый",
+      "demand_multiplier": [
+        1.0,
+        1.2
+      ],
+      "tariff_multiplier": 1.0,
+      "pv_multiplier": 1.0,
+      "probability": null
+    },
+    {
+      "id": "ускоренный рост",
+      "demand_multiplier": [
+        1.25,
+        1.55
+      ],
+      "tariff_multiplier": 1.07,
+      "pv_multiplier": 1.0,
+      "probability": null
+    }
+  ],
+  "travel_edges": [
+    {
+      "zone_id": "homes",
+      "site_id": "west",
+      "minutes": 0.5783333333333334
+    },
+    {
+      "zone_id": "homes",
+      "site_id": "centre",
+      "minutes": 4.0633333333333335
+    },
+    {
+      "zone_id": "homes",
+      "site_id": "east",
+      "minutes": 4.6033333333333335
+    },
+    {
+      "zone_id": "homes",
+      "site_id": "south",
+      "minutes": 3.77
+    },
+    {
+      "zone_id": "taxi",
+      "site_id": "west",
+      "minutes": 4.6899999999999995
+    },
+    {
+      "zone_id": "taxi",
+      "site_id": "centre",
+      "minutes": 1.1883333333333332
+    },
+    {
+      "zone_id": "taxi",
+      "site_id": "east",
+      "minutes": 2.2800000000000002
+    },
+    {
+      "zone_id": "taxi",
+      "site_id": "south",
+      "minutes": 4.933333333333334
+    },
+    {
+      "zone_id": "fleet",
+      "site_id": "west",
+      "minutes": 5.008333333333334
+    },
+    {
+      "zone_id": "fleet",
+      "site_id": "centre",
+      "minutes": 2.9166666666666665
+    },
+    {
+      "zone_id": "fleet",
+      "site_id": "east",
+      "minutes": 3.0233333333333334
+    },
+    {
+      "zone_id": "fleet",
+      "site_id": "south",
+      "minutes": 5.251666666666667
+    }
+  ],
+  "parameters": {
+    "mode": "city",
+    "risk": "worst_case",
+    "cvar_alpha": 0.9,
+    "max_cvar_loss_rub": null,
+    "max_cvar_unmet_kwh": null,
+    "years": [
+      2027,
+      2028
+    ],
+    "annual_budgets_rub": [
+      7000000.0,
+      3000000.0
+    ],
+    "total_budget_rub": 10000000.0,
+    "sale_rub_per_kwh": 32.0,
+    "purchase_rub_per_kwh": 9.0,
+    "discount_rate": 0.12,
+    "pv_hourly_factor": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.05,
+      0.12,
+      0.23,
+      0.39,
+      0.55,
+      0.7,
+      0.78,
+      0.8,
+      0.75,
+      0.62,
+      0.47,
+      0.28,
+      0.12,
+      0.02,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "storage_efficiency": 0.9,
+    "storage_max_hours": 2.0,
+    "storage_degradation_rub_per_kwh": 2.0,
+    "minimum_zone_service": 0.25,
+    "solver_seconds": 90,
+    "simulation_days": 3
+  },
+  "datasets": [
+    {
+      "name": "Monaco OSM POIs and roads 2026-09-22",
+      "role": "other",
+      "kind": "observed",
+      "source": "https://download.geofabrik.de/europe/monaco-260922.osm.pbf",
+      "sha256": "5104a7858b75c9a1dad86b690fe9a58f1284cd59819e76034882f5b5cbeceac7",
+      "version_id": null,
+      "license": "ODbL 1.0; © OpenStreetMap contributors",
+      "captured_at": null,
+      "transform_version": "commission-poi-v1"
+    },
+    {
+      "name": "Scenario assumptions from demo",
+      "role": "planning_assumptions",
+      "kind": "assumed",
+      "source": "examples/demo.json; not Monaco measurements",
+      "sha256": "474e7cabaf504355b6292e95b00f118a4da13f709f2afd5c719ed6299d95071a",
+      "version_id": null,
+      "license": null,
+      "captured_at": null,
+      "transform_version": "commission-poi-v1"
+    },
+    {
+      "name": "Дорожная матрица OSRM",
+      "role": "routing",
+      "kind": "derived",
+      "source": "http://osrm:5000; profile=driving; routing_dataset=geofabrik-monaco-260922-pbf-sha256:5104a7858b75c9a1dad86b690fe9a58f1284cd59819e76034882f5b5cbeceac7",
+      "sha256": "c52e7b66c61f4d638a1721bf4ba0b113d58d4cedafa56c59b73ccf372504930d",
+      "version_id": null,
+      "license": "ODbL 1.0; © OpenStreetMap contributors",
+      "captured_at": null,
+      "transform_version": null
+    }
+  ],
+  "locked_site_ids": [],
+  "excluded_site_ids": []
+}

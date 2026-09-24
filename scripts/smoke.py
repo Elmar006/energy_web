@@ -71,7 +71,8 @@ def main() -> None:
         assert abs(sample["requested_energy_kwh"] - sample["energy_kwh"]
                    - sample["unserved_energy_kwh"]) < 0.002
         assert 0 <= sample["partial_energy_kwh"] <= sample["energy_kwh"]
-        assert sample["last_completion_minute"] is None or sample["last_completion_minute"] <= 1440
+        assert (sample["last_completion_minute"] is None
+                or 0 <= sample["last_completion_minute"] <= sample["simulation_days"] * 1440)
     assert result["explanations"], "counterfactual explanation missing"
     assert [item["target_service_fraction"] for item in result["alternatives"]] == [0, 0.5, 1]
     for alternative in result["alternatives"]:
