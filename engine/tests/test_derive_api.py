@@ -85,3 +85,20 @@ def test_bad_upload_is_rejected_without_fabricating_values(small_input):
         response = request(small_input, csv_data, **changes)
         assert response.status_code == 422, response.text
         assert reason in response.text
+
+
+def test_session_gap_requires_explicit_coverage_assertion(small_input):
+    csv_data = ("session_id,zone_id,started_at,ended_at,energy_kwh\n"
+                "one,z1,2027-04-01T12:00:00+00:00,2027-04-01T13:00:00+00:00,10\n").encode()
+    rejected = request(small_input, csv_data, end_date="2027-04-02")
+    assert rejected.status_code == 422
+    assert "coverage_complete" in rejected.text
+    accepted = request(small_input, csv_data, end_date="2027-04-02", coverage_complete=True)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["spec"]["zones"][0]["arrival_profile"]["coverage_complete"] is True
+    assert accepted.json()["spec"]["zones"][0]["hourly_kwh"][15] == 5
+    grid = ("grid_node_id,hour,headroom_kw\n" +
+            "".join(f"g1,{hour},10\n" for hour in range(24))).encode()
+    invalid_grid = request(small_input, grid, role="grid_headroom", start_date=None,
+                           end_date=None, profile_date="2026-09-01", coverage_complete=True)
+    assert invalid_grid.status_code == 422

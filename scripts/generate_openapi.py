@@ -92,13 +92,20 @@ schemas = {
         "passed", "max_energy_balance_error_kwh_per_minute", "max_grid_node_overload_kw",
         "max_station_connection_overload_kw", "max_equipment_overload_kw",
         "max_storage_soc_violation_kwh", "max_simultaneous_storage_kw",
-        "session_dispatch_energy_mismatch_kwh"],
+        "session_dispatch_energy_mismatch_kwh", "storage_energy_balance_error_kwh"],
         "properties": {"passed": {"type": "boolean"},
             **{name: {"type": "number", "minimum": 0} for name in (
                 "max_energy_balance_error_kwh_per_minute", "max_grid_node_overload_kw",
                 "max_station_connection_overload_kw", "max_equipment_overload_kw",
                 "max_storage_soc_violation_kwh", "max_simultaneous_storage_kw",
-                "session_dispatch_energy_mismatch_kwh")}}},
+                "session_dispatch_energy_mismatch_kwh", "storage_energy_balance_error_kwh")}}},
+    "DayDispatch": {"type": "object", "required": ["day_index", "arrivals", "dispatch_by_site",
+        "charging_sessions_at_boundary", "queued_sessions_at_boundary"], "properties": {
+        "day_index": {"type": "integer", "minimum": 0},
+        "arrivals": {"type": "integer", "minimum": 0},
+        "dispatch_by_site": {"type": "array", "items": ref("DispatchSite")},
+        "charging_sessions_at_boundary": {"type": "integer", "minimum": 0},
+        "queued_sessions_at_boundary": {"type": "integer", "minimum": 0}}},
     "OptimizationResult": {"type": "object", "required": [
         "status", "objective", "gap", "selected", "grid_upgrades", "battery", "solar",
         "served_kwh", "unmet_kwh", "cashflow_rub", "diagnostic", "risk_metrics",
@@ -128,25 +135,31 @@ schemas = {
             "energy_audit": {"type": "array", "items": ref("EnergyAudit")},
             "verification": ref("PhysicalVerification")}},
     "SimulationResult": {"type": "object", "required": [
-        "year", "scenario_id", "seed", "arrivals", "served_sessions", "refused_sessions",
-        "arrivals_by_hour", "requested_energy_kwh", "unserved_energy_kwh",
+        "year", "scenario_id", "seed", "simulation_days", "arrivals", "served_sessions", "refused_sessions",
+        "arrivals_by_hour", "arrivals_by_day_hour", "day_dispatch", "requested_energy_kwh", "unserved_energy_kwh",
         "mean_wait_minutes", "p95_wait_minutes", "energy_kwh", "partial_energy_kwh",
         "last_completion_minute", "served_by_zone", "refused_by_zone", "energy_by_site_kwh",
         "dispatch_by_site", "dispatch_verification", "assumptions"],
         "properties": {
             "year": {"type": "integer"}, "scenario_id": {"type": "string"}, "seed": {"type": "integer"},
+            "simulation_days": {"type": "integer", "minimum": 1, "maximum": 14},
             "arrivals": {"type": "integer", "minimum": 0},
             "served_sessions": {"type": "integer", "minimum": 0},
             "refused_sessions": {"type": "integer", "minimum": 0},
             "arrivals_by_hour": {"type": "array", "minItems": 24, "maxItems": 24,
                                  "items": {"type": "integer", "minimum": 0}},
+            "arrivals_by_day_hour": {"type": "array", "minItems": 1, "maxItems": 14,
+                "items": {"type": "array", "minItems": 24, "maxItems": 24,
+                          "items": {"type": "integer", "minimum": 0}}},
+            "day_dispatch": {"type": "array", "minItems": 1, "maxItems": 14,
+                             "items": ref("DayDispatch")},
             "requested_energy_kwh": {"type": "number", "minimum": 0},
             "unserved_energy_kwh": {"type": "number", "minimum": 0},
             "mean_wait_minutes": {"type": ["number", "null"], "minimum": 0},
             "p95_wait_minutes": {"type": ["number", "null"], "minimum": 0},
             "energy_kwh": {"type": "number", "minimum": 0},
             "partial_energy_kwh": {"type": "number", "minimum": 0},
-            "last_completion_minute": {"type": ["number", "null"], "minimum": 0, "maximum": 1440},
+            "last_completion_minute": {"type": ["number", "null"], "minimum": 0, "maximum": 20160},
             "served_by_zone": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
             "refused_by_zone": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
             "energy_by_site_kwh": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}},
@@ -157,10 +170,11 @@ schemas = {
         "scenario_id", "year", "seeds", "optimized_service_fraction",
         "simulated_service_fraction_mean", "simulated_service_fraction_min",
         "simulated_service_fraction_max", "service_gap_percentage_points",
-        "requested_energy_kwh_mean", "delivered_energy_kwh_mean", "unserved_energy_kwh_mean"],
+        "simulation_days", "requested_energy_kwh_mean", "delivered_energy_kwh_mean", "unserved_energy_kwh_mean"],
         "properties": {
             "scenario_id": {"type": "string"}, "year": {"type": "integer"},
             "seeds": {"type": "integer", "minimum": 1},
+            "simulation_days": {"type": "integer", "minimum": 1, "maximum": 14},
             **{name: {"type": "number", "minimum": 0, "maximum": 1} for name in (
                 "optimized_service_fraction", "simulated_service_fraction_mean",
                 "simulated_service_fraction_min", "simulated_service_fraction_max")},
@@ -269,7 +283,9 @@ def planning_csv_import(role: str) -> dict:
               "file": {"type": "string", "format": "binary"}}
     if role == "demand_sessions":
         common.update({"start_date": {"type": "string", "format": "date"},
-                       "end_date": {"type": "string", "format": "date"}})
+                       "end_date": {"type": "string", "format": "date"},
+                       "coverage_complete": {"type": "boolean", "default": False,
+                           "description": "Importer asserts every zone and calendar day is covered, including zero-session days. Required to accept days with no records."}})
     else:
         common["profile_date"] = {"type": "string", "format": "date"}
     required = ["scenario_name", "dataset_name", "source", "kind", "time_zone", "file"]

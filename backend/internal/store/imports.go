@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/Elmar006/energy_web/backend/internal/planning"
 	"github.com/jackc/pgx/v5"
@@ -46,6 +47,7 @@ func (s *Store) SaveScenarioImport(ctx context.Context, in planning.ImportInput,
 		"role": in.Role, "source": in.Source, "kind": in.Kind,
 		"time_zone": in.TimeZone, "start_date": in.StartDate,
 		"end_date": in.EndDate, "profile_date": in.ProfileDate,
+		"coverage_complete": fmt.Sprint(in.CoverageComplete),
 		"transform_version": transformVersion,
 	})
 	if err != nil {

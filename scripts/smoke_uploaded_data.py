@@ -62,10 +62,22 @@ def main() -> None:
     assert call("GET", f"/api/v1/datasets/{derived['dataset_id']}/file") == sessions
     assert json_call("GET", f"/api/v1/scenarios/{parent['id']}")["spec"] == base
     assert sum(derived["scenario"]["spec"]["zones"][0]["hourly_kwh"]) == 20
-    assert derived["scenario"]["spec"]["datasets"][-1]["transform_version"] == "metered-sessions-v2"
+    assert derived["scenario"]["spec"]["datasets"][-1]["transform_version"] == "metered-sessions-v3"
     repeat = upload(parent["id"], "sessions", common, sessions)
     assert repeat["reused"] and repeat["scenario"]["id"] == derived["scenario"]["id"]
     assert repeat["dataset_id"] == derived["dataset_id"]
+
+    incomplete = {**common, "end_date": "2027-04-02"}
+    try:
+        upload(parent["id"], "sessions", incomplete, sessions)
+    except HTTPError as error:
+        assert error.code == 422, error
+    else:
+        raise AssertionError("missing day was silently counted as zero sessions")
+    confirmed = upload(parent["id"], "sessions",
+                       {**incomplete, "coverage_complete": "true"}, sessions)
+    assert confirmed["scenario"]["spec"]["zones"][0]["arrival_profile"]["coverage_complete"] is True
+    assert sum(confirmed["scenario"]["spec"]["zones"][0]["hourly_kwh"]) == 10
 
     grid = (ROOT / "examples" / "grid_profile_sample.csv").read_bytes()
     grid_fields = {"scenario_name": "synthetic demand and grid", "dataset_name": "synthetic grid reserve",
@@ -99,6 +111,9 @@ def main() -> None:
     assert result["optimization"]["verification"]["passed"] is True
     assert result["optimization"]["service_by_year"][0]["demand_kwh"] == 20
     assert result["simulation"] and result["simulation"][0]["dispatch_verification"]["passed"] is True
+    assert result["simulation"][0]["simulation_days"] == 3
+    assert len(result["simulation"][0]["day_dispatch"]) == 3
+    assert result["simulation"][0]["dispatch_verification"]["storage_energy_balance_error_kwh"] <= 1e-6
     print("uploaded CSV -> versioned scenario -> worker -> verified calculation: OK")
 
 

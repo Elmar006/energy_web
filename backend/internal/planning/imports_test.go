@@ -132,6 +132,11 @@ func TestGridImportRequiresProfileDateAndHasSeparateSizeLimit(t *testing.T) {
 	if err := in.normalize(); err != nil {
 		t.Fatal(err)
 	}
+	in.CoverageComplete = true
+	if err := in.normalize(); !errors.Is(err, ErrInvalidImport) {
+		t.Fatalf("grid import accepted session-only coverage flag: %v", err)
+	}
+	in.CoverageComplete = false
 	in.CSV = make([]byte, MaxGridCSV+1)
 	if err := in.normalize(); !errors.Is(err, ErrImportTooLarge) {
 		t.Fatalf("oversize grid file accepted: %v", err)
@@ -147,7 +152,10 @@ func TestImportIdentityIncludesTransformVersionAndObservationWindow(t *testing.T
 	changedModel, _ := importDigest(in, "sha", "metered-sessions-v3")
 	in.EndDate = "2027-04-03"
 	changedWindow, _ := importDigest(in, "sha", "metered-sessions-v2")
-	if first == changedModel || first == changedWindow {
+	in.EndDate = "2027-04-02"
+	in.CoverageComplete = true
+	changedCoverage, _ := importDigest(in, "sha", "metered-sessions-v2")
+	if first == changedModel || first == changedWindow || first == changedCoverage {
 		t.Fatal("a changed transformation or observation window reused the old scenario")
 	}
 }

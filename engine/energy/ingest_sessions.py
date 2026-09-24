@@ -23,7 +23,7 @@ import numpy as np
 from .contracts import DatasetReference, PlanningInput, Provenance, SessionArrivalProfile
 
 REQUIRED_COLUMNS = {"session_id", "zone_id", "started_at", "ended_at", "energy_kwh"}
-TRANSFORM_VERSION = "metered-sessions-v2"
+TRANSFORM_VERSION = "metered-sessions-v3"
 
 
 def derive_demand(
@@ -36,6 +36,7 @@ def derive_demand(
     end_date: date,
     license: str | None = None,
     kind: Literal["observed", "assumed"] = "assumed",
+    coverage_complete: bool = False,
 ) -> PlanningInput:
     if not source.strip():
         raise ValueError("source description is required")
@@ -110,6 +111,15 @@ def derive_demand(
     if missing:
         raise ValueError("no sessions for zones: " + ", ".join(missing))
     days = (end_date - start_date).days + 1
+    gaps = {zone_id: [start_date + timedelta(days=day) for day in range(days)
+                      if start_date + timedelta(days=day) not in daily_arrivals[zone_id]]
+            for zone_id in sorted(zone_ids)}
+    gaps = {zone_id: dates for zone_id, dates in gaps.items() if dates}
+    if gaps and not coverage_complete:
+        example_zone = next(iter(gaps))
+        raise ValueError(f"missing session records for {example_zone} on {gaps[example_zone][0]}; "
+                         "set coverage_complete=true only if the export covers every zone and day "
+                         "and these are confirmed zero-session days")
     checksum = hashlib.sha256(csv_bytes).hexdigest()
     result = planning_input.model_copy(deep=True)
     for item in result.zones:
@@ -119,7 +129,8 @@ def derive_demand(
         item.provenance = Provenance(
             kind="derived",
             source=f"{source}; CSV SHA-256 {checksum}; {start_date}..{end_date}; "
-                   f"{time_zone}; input_kind={kind}; session energy apportioned by duration",
+                   f"{time_zone}; input_kind={kind}; coverage_complete={coverage_complete}; "
+                   "session energy apportioned by duration",
         )
         daily = [daily_arrivals[item.id].get(start_date + timedelta(days=day), [0] * 24)
                  for day in range(days)]
@@ -131,11 +142,14 @@ def derive_demand(
             hourly_count_variance=variances,
             energy_quantiles_kwh=[float(value) for value in np.quantile(
                 energies, np.linspace(0, 1, 101), method="inverted_cdf")],
-            sample_count=len(energies), observation_days=days, source_kind=kind,
+            sample_count=len(energies), observation_days=days,
+            days_with_sessions=len(daily_arrivals[item.id]), coverage_complete=coverage_complete,
+            source_kind=kind,
             hourly_load_method="uniform_session_duration",
             provenance=Provenance(kind="derived",
                                   source=f"{source}; CSV SHA-256 {checksum}; {start_date}..{end_date}; "
-                                         f"{time_zone}; input_kind={kind}; starts and delivered session energy"),
+                                         f"{time_zone}; input_kind={kind}; coverage_complete={coverage_complete}; "
+                                         "starts and delivered session energy"),
         )
     result.datasets.append(DatasetReference(
         name="Зарядные сессии", role="demand_sessions", kind=kind,
@@ -156,6 +170,8 @@ def main() -> None:
     parser.add_argument("--time-zone", required=True, help="IANA time zone, e.g. Europe/Moscow")
     parser.add_argument("--start-date", required=True, type=date.fromisoformat)
     parser.add_argument("--end-date", required=True, type=date.fromisoformat)
+    parser.add_argument("--coverage-complete", action="store_true",
+                        help="Assert every zone and day was covered by the export, including zero-session days")
     args = parser.parse_args()
     if args.output.resolve() in {args.scenario.resolve(), args.sessions.resolve()}:
         parser.error("output must differ from input paths")
@@ -163,7 +179,8 @@ def main() -> None:
         planning_input = PlanningInput.model_validate_json(args.scenario.read_bytes())
         result = derive_demand(planning_input, args.sessions.read_bytes(), source=args.source,
                                license=args.license, kind=args.kind, time_zone=args.time_zone,
-                               start_date=args.start_date, end_date=args.end_date)
+                               start_date=args.start_date, end_date=args.end_date,
+                               coverage_complete=args.coverage_complete)
         args.output.write_text(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
                                encoding="utf-8")
     except (OSError, ValueError) as error:

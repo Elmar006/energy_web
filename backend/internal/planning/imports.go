@@ -33,6 +33,7 @@ type ImportInput struct {
 	StartDate        string
 	EndDate          string
 	ProfileDate      string
+	CoverageComplete bool
 	CSV              []byte
 }
 
@@ -126,6 +127,9 @@ func (in *ImportInput) normalize() error {
 			return invalidImport("start_date and end_date must span 1..367 calendar days; profile_date must be empty")
 		}
 	} else {
+		if in.CoverageComplete {
+			return invalidImport("coverage_complete applies only to demand_sessions")
+		}
 		if _, err := time.Parse("2006-01-02", in.ProfileDate); err != nil || in.StartDate != "" || in.EndDate != "" {
 			return invalidImport("profile_date must be YYYY-MM-DD; start_date and end_date must be empty")
 		}
@@ -148,7 +152,7 @@ func importDigest(in ImportInput, fileSHA, transformVersion string) (string, err
 	// is display metadata; it does not alter the derived scenario or import key.
 	raw, err := json.Marshal([]string{in.ParentScenarioID, in.Role, in.ScenarioName,
 		in.DatasetName, in.Source, in.License, in.Kind, in.TimeZone,
-		in.StartDate, in.EndDate, in.ProfileDate, fileSHA, transformVersion})
+		in.StartDate, in.EndDate, in.ProfileDate, fmt.Sprint(in.CoverageComplete), fileSHA, transformVersion})
 	if err != nil {
 		return "", err
 	}

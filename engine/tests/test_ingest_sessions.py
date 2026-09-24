@@ -28,7 +28,8 @@ def test_midnight_session_is_normalized_by_explicit_day_count(small_input):
     sessions = ("session_id,zone_id,started_at,ended_at,energy_kwh\n"
                 "one,z1,2027-04-01T20:30:00+00:00,2027-04-01T21:30:00+00:00,10\n").encode()
     result = derive_demand(small_input, sessions, source="operator export", time_zone="Europe/Moscow",
-                           start_date=date(2027, 4, 1), end_date=date(2027, 4, 2))
+                           start_date=date(2027, 4, 1), end_date=date(2027, 4, 2),
+                           coverage_complete=True)
     assert result.zones[0].hourly_kwh[23] == pytest.approx(2.5)
     assert result.zones[0].hourly_kwh[0] == pytest.approx(2.5)
     assert sum(result.zones[0].hourly_kwh) == pytest.approx(5)
@@ -119,3 +120,25 @@ def test_skewed_session_energy_uses_empirical_inverse_cdf_not_smoothed_percentil
     assert result.zones[0].mean_session_kwh == 34
     assert profile.energy_quantiles_kwh[66] == 1
     assert profile.energy_quantiles_kwh[67] == 100
+
+
+def test_missing_calendar_day_is_not_silently_divided_into_observed_demand(small_input):
+    rows = ("session_id,zone_id,started_at,ended_at,energy_kwh\n"
+            "one,z1,2027-04-01T12:00:00+00:00,2027-04-01T13:00:00+00:00,10\n"
+            "two,z1,2027-04-03T12:00:00+00:00,2027-04-03T13:00:00+00:00,20\n").encode()
+    kwargs = {"source": "operator export", "kind": "observed", "time_zone": "Europe/Moscow",
+              "start_date": date(2027, 4, 1), "end_date": date(2027, 4, 3)}
+    with pytest.raises(ValueError, match="missing session records.*coverage_complete"):
+        derive_demand(small_input, rows, **kwargs)
+    confirmed = derive_demand(small_input, rows, coverage_complete=True, **kwargs)
+    profile = confirmed.zones[0].arrival_profile
+    assert profile.coverage_complete is True
+    assert profile.days_with_sessions == 2
+    assert profile.observation_days == 3
+    assert sum(confirmed.zones[0].hourly_kwh) == pytest.approx(10)
+    assert sum(profile.hourly_sessions) == pytest.approx(2 / 3)
+    raw = confirmed.model_dump(mode="json")
+    raw["zones"][0]["arrival_profile"]["coverage_complete"] = False
+    from energy.contracts import PlanningInput
+    with pytest.raises(ValueError, match="missing session days require coverage_complete"):
+        PlanningInput.model_validate(raw)
