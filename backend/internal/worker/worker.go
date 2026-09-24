@@ -93,17 +93,21 @@ func processingTimeout(spec json.RawMessage) time.Duration {
 	if json.Unmarshal(spec, &input) == nil && input.Parameters.SolverSeconds >= 1 && input.Parameters.SolverSeconds <= 3600 {
 		seconds = input.Parameters.SolverSeconds
 	}
-	// One primary optimization plus up to three counterfactual re-solves.
-	// The allowance covers simulation, serialization and transient scheduling.
+	// One primary optimization and up to three counterfactual re-solves.
+	// Three alternatives use at most 20 solver seconds each, covered by the
+	// additional ten minutes together with simulation and serialization.
 	return time.Duration(4*seconds)*time.Second + 10*time.Minute
 }
 
 func (w *Worker) calculate(ctx context.Context, spec json.RawMessage) (json.RawMessage, string, string) {
 	payload, err := json.Marshal(struct {
-		Input       json.RawMessage `json:"input"`
-		Seeds       []int           `json:"simulation_seeds"`
-		ExplainTopN int             `json:"explain_top_n"`
-	}{Input: spec, Seeds: []int{1, 2, 3}, ExplainTopN: 3})
+		Input                       json.RawMessage `json:"input"`
+		Seeds                       []int           `json:"simulation_seeds"`
+		ExplainTopN                 int             `json:"explain_top_n"`
+		AlternativeServiceFractions []float64       `json:"alternative_service_fractions"`
+		AlternativeSolverSeconds    int             `json:"alternative_solver_seconds"`
+	}{Input: spec, Seeds: []int{1, 2, 3}, ExplainTopN: 3,
+		AlternativeServiceFractions: []float64{0, 0.5, 1}, AlternativeSolverSeconds: 20})
 	if err != nil {
 		return nil, "invalid_input", err.Error()
 	}

@@ -6,10 +6,11 @@ import sys
 from importlib.metadata import version
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .contracts import PlanningInput
 from .analysis import explain_selected_sites
+from .alternatives import calculate_alternatives
 from .corridor import CorridorInput, check_corridor
 from .fleet import FleetInput, schedule_fleet
 from .optimizer import solve
@@ -22,6 +23,15 @@ class CalculationRequest(BaseModel):
     input: PlanningInput
     simulation_seeds: list[int] = Field(default_factory=lambda: [1, 2, 3], max_length=30)
     explain_top_n: int = Field(default=0, ge=0, le=10)
+    alternative_service_fractions: list[float] = Field(default_factory=lambda: [0.0, 0.5, 1.0], max_length=5)
+    alternative_solver_seconds: int = Field(default=20, ge=1, le=60)
+
+    @model_validator(mode="after")
+    def validate_alternative_targets(self):
+        targets = self.alternative_service_fractions
+        if any(not 0 <= value <= 1 for value in targets) or targets != sorted(set(targets)):
+            raise ValueError("alternative_service_fractions must be unique, sorted values in [0,1]")
+        return self
 
 
 @app.get("/healthz")
@@ -51,10 +61,12 @@ def calculate(request: CalculationRequest):
     result = solve(request.input)
     canonical = json.dumps(request.input.model_dump(mode="json"), ensure_ascii=False,
                            sort_keys=True, separators=(",", ":")).encode("utf-8")
-    output = {"optimization": result.as_dict(), "simulation": [], "explanations": [],
-              "metadata": {"model_version": "planner-mip-v1", "input_sha256": hashlib.sha256(canonical).hexdigest(),
+    output = {"optimization": result.as_dict(), "simulation": [], "explanations": [], "alternatives": [],
+              "metadata": {"model_version": "planner-mip-v2", "input_sha256": hashlib.sha256(canonical).hexdigest(),
                            "python_version": sys.version.split()[0], "pyomo_version": version("pyomo"),
-                           "highspy_version": version("highspy"), "simulation_seeds": request.simulation_seeds}}
+                           "highspy_version": version("highspy"), "simulation_seeds": request.simulation_seeds,
+                           "alternative_service_fractions": request.alternative_service_fractions,
+                           "alternative_solver_seconds": request.alternative_solver_seconds}}
     if result.status not in ("optimal", "feasible"):
         return output
     for scenario in request.input.scenarios:
@@ -65,4 +77,7 @@ def calculate(request: CalculationRequest):
                                                      grid_upgrades=result.grid_upgrades))
     if request.explain_top_n:
         output["explanations"] = explain_selected_sites(request.input, result, request.explain_top_n)
+    if request.alternative_service_fractions:
+        output["alternatives"] = calculate_alternatives(request.input, request.alternative_service_fractions,
+                                                         request.simulation_seeds, request.alternative_solver_seconds)
     return output
