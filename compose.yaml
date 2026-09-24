@@ -82,7 +82,8 @@ services:
       ENERGY_API_URL: http://api:8080
       API_TOKEN: ${API_TOKEN:-local-development-token-change-before-deploy}
       APP_DEMO_PASSWORD: ${APP_DEMO_PASSWORD:-demo-local-password}
-      YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY:-}
+      DGIS_MAPGL_API_KEY: ${DGIS_MAPGL_API_KEY:-}
+      DGIS_MAP_STYLE_ID: ${DGIS_MAP_STYLE_ID:-}
     depends_on:
       - api
     ports:

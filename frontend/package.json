@@ -11,6 +11,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@2gis/mapgl": "^1.78.1",
     "lucide-react": "0.468.0",
     "next": "16.3.6",
     "react": "19.2.4",
@@ -21,7 +22,6 @@
     "@types/node": "24.5.2",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "@yandex/ymaps3-types": "^1.0.21108841",
     "eslint": "9.36.0",
     "eslint-config-next": "16.3.6",
     "typescript": "5.9.3"

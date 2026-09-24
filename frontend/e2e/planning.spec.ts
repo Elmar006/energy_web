@@ -2,6 +2,48 @@ import { expect, test } from "@playwright/test";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 
+test("карта 2ГИС загружает сценарные маркеры и поддерживает управление масштабом", async ({ page }) => {
+  await page.route("**/api/maps/config", (route) => route.fulfill({
+    contentType: "application/json", body: JSON.stringify({ configured: true, apiKey: "mapgl-test-key" }),
+  }));
+  await page.route("https://mapgl.2gis.com/api/js", (route) => route.fulfill({
+    contentType: "application/javascript",
+    body: `window.mapgl = {
+      Map: class {
+        constructor(container, options) {
+          this.container = container; this.zoom = options.zoom;
+          window.__mapglTest = { key: options.key, center: options.center, markers: [], zooms: [], fitted: false };
+        }
+        on() {}
+        fitBounds() { window.__mapglTest.fitted = true; }
+        getZoom() { return this.zoom; }
+        setZoom(value) { this.zoom = value; window.__mapglTest.zooms.push(value); }
+        destroy() { this.container.replaceChildren(); }
+      },
+      HtmlMarker: class {
+        constructor(map, options) {
+          map.container.appendChild(options.html);
+          window.__mapglTest.markers.push(options.coordinates);
+        }
+      }
+    };`,
+  }));
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_DEMO_PASSWORD ?? "demo-local-password");
+  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await expect(page.getByText("2ГИС", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /зона спроса/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /кандидат/ }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Приблизить карту" }).click();
+  const state = await page.evaluate(() => (window as typeof window & {
+    __mapglTest: { key: string; markers: number[][]; zooms: number[]; fitted: boolean };
+  }).__mapglTest);
+  expect(state.key).toBe("mapgl-test-key");
+  expect(state.markers.length).toBeGreaterThan(0);
+  expect(state.fitted).toBe(true);
+  expect(state.zooms).toEqual([13]);
+});
+
 test("мобильный сценарий доступен от входа до результата и выхода", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");

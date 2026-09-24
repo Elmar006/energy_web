@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from energy import api
 from energy.api import app
 
 
@@ -14,16 +15,29 @@ def test_calculate_contract(small_input):
         {"scenario_id": "base", "year": 2027, "demand_kwh": 10, "served_kwh": 10, "unmet_kwh": 0}]
     assert len(body["simulation"]) == 1
     assert body["simulation"][0]["arrivals"] == body["simulation"][0]["served_sessions"] + body["simulation"][0]["refused_sessions"]
+    assert body["simulation"][0]["dispatch_verification"]["passed"] is True
+    assert body["simulation"][0]["dispatch_by_site"][0]["site_id"] == "s1"
+    assert sum(body["simulation"][0]["arrivals_by_hour"]) == body["simulation"][0]["arrivals"]
+    assert abs(body["simulation"][0]["requested_energy_kwh"] - body["simulation"][0]["energy_kwh"]
+               - body["simulation"][0]["unserved_energy_kwh"]) < 0.002
+    assert body["operational_validation"][0]["seeds"] == 1
+    assert body["operational_validation"][0]["optimized_service_fraction"] == 1
+    assert body["operational_economics"][0]["seeds"] == 1
+    assert "simulated_npv_rub_mean" in body["operational_economics"][0]
     assert body["explanations"][0]["site_id"] == "s1"
     assert body["explanations"][0]["lost_served_kwh"]["base"] == 10
     assert len(body["metadata"]["input_sha256"]) == 64
-    assert body["metadata"]["model_version"] == "planner-mip-v2"
+    assert body["metadata"]["model_version"] == "planner-mip-v3"
+    assert body["metadata"]["input_quality"]["demand_scope"] == "scenario_assumptions"
     assert [item["target_service_fraction"] for item in body["alternatives"]] == [0, 0.5, 1]
     assert body["alternatives"][0]["optimization"]["objective"] == 0
     assert body["alternatives"][2]["optimization"]["verification"]["passed"] is True
     assert body["alternatives"][2]["achieved_min_service_fraction"] == 1
     assert body["alternatives"][2]["same_investment_as_target"] == 0.5
     assert len(body["alternatives"][2]["simulation"]) == 1
+    assert body["alternatives"][2]["simulation"][0]["dispatch_verification"]["passed"] is True
+    assert body["alternatives"][2]["operational_validation"][0]["seeds"] == 1
+    assert body["alternatives"][2]["operational_economics"][0]["seeds"] == 1
 
 
 def test_validate_contract_rejects_broken_references(small_input):
@@ -60,6 +74,10 @@ def test_alternative_targets_are_validated_and_can_be_disabled(small_input):
         invalid = client.post("/v1/calculate", json={"input": small_input.model_dump(),
                                                       "alternative_service_fractions": targets})
         assert invalid.status_code == 422
+    for seeds in ([1, 1], [-1]):
+        invalid = client.post("/v1/calculate", json={"input": small_input.model_dump(),
+                                                      "simulation_seeds": seeds})
+        assert invalid.status_code == 422
     result = client.post("/v1/calculate", json={"input": small_input.model_dump(),
                                                  "alternative_service_fractions": [],
                                                  "simulation_seeds": []})
@@ -81,3 +99,26 @@ def test_operator_response_keeps_no_build_recommendation_and_service_alternative
     assert alternative["optimization"]["objective"] == 1000
     assert alternative["optimization"]["cashflow_rub"]["base"] < 0
     assert alternative["simulation"][0]["seed"] == 7
+
+
+def test_failed_dispatch_audit_cannot_be_published(small_input, monkeypatch):
+    monkeypatch.setattr(api, "simulate", lambda *args, **kwargs:
+                        {"dispatch_verification": {"passed": False}})
+    response = TestClient(app).post("/v1/calculate", json={"input": small_input.model_dump(),
+                                                          "simulation_seeds": [1],
+                                                          "alternative_service_fractions": []})
+    assert response.status_code == 500
+    assert "physical verification" in response.json()["detail"]
+
+
+def test_real_queue_simulation_exposes_service_gap_from_hourly_optimizer(small_input):
+    small_input.zones[0].hourly_kwh = [10] * 24
+    response = TestClient(app).post("/v1/calculate", json={
+        "input": small_input.model_dump(), "simulation_seeds": [1, 2, 3],
+        "alternative_service_fractions": [],
+    })
+    assert response.status_code == 200
+    row = response.json()["operational_validation"][0]
+    assert row["optimized_service_fraction"] == 1
+    assert row["simulated_service_fraction_mean"] < 1
+    assert row["service_gap_percentage_points"] > 0

@@ -59,11 +59,17 @@ def main() -> None:
     assert result["optimization"]["verification"]["passed"] is True
     assert result["optimization"]["investment_rub_by_year"]
     assert result["optimization"]["service_by_year"]
+    assert result["operational_validation"]
+    assert result["operational_economics"]
+    assert result["metadata"]["input_quality"]["demand_scope"] == "scenario_assumptions"
     assert result["optimization"]["energy_audit"]
     assert result["optimization"]["selected"], "no sites selected"
     assert result["simulation"], "simulation missing"
     for sample in result["simulation"]:
         assert sample["arrivals"] == sample["served_sessions"] + sample["refused_sessions"]
+        assert sample["arrivals"] == sum(sample["arrivals_by_hour"])
+        assert abs(sample["requested_energy_kwh"] - sample["energy_kwh"]
+                   - sample["unserved_energy_kwh"]) < 0.002
         assert 0 <= sample["partial_energy_kwh"] <= sample["energy_kwh"]
         assert sample["last_completion_minute"] is None or sample["last_completion_minute"] <= 1440
     assert result["explanations"], "counterfactual explanation missing"
@@ -76,6 +82,8 @@ def main() -> None:
             assert alternative["achieved_min_service_fraction"] is not None
             assert alternative["achieved_min_service_fraction"] + 1e-4 >= alternative["target_service_fraction"]
             assert alternative["simulation"]
+            assert alternative["operational_validation"]
+            assert alternative["operational_economics"]
             for sample in alternative["simulation"]:
                 assert sample["seed"] in result["metadata"]["simulation_seeds"]
         else:

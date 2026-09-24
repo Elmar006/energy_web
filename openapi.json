@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Вектор — planning API",
+    "title": "EV Infrastructure Planning API",
     "version": "1.0.0",
     "description": "Public scenario, run and geography API. Engine coordinates and money are explicit in ScenarioSpec."
   },
@@ -450,6 +450,80 @@
         "title": "Scenario",
         "type": "object"
       },
+      "SessionArrivalProfile": {
+        "additionalProperties": false,
+        "description": "Measured sessions starting in each local hour of a representative day.\n\nQuantiles are the empirical inverse CDF at probabilities 0, 0.01, ..., 1.\nThey describe *delivered* session energy, not unobserved demand.",
+        "properties": {
+          "hourly_sessions": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Hourly Sessions",
+            "type": "array"
+          },
+          "hourly_count_variance": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Hourly Count Variance",
+            "type": "array"
+          },
+          "energy_quantiles_kwh": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 101,
+            "minItems": 101,
+            "title": "Energy Quantiles Kwh",
+            "type": "array"
+          },
+          "sample_count": {
+            "exclusiveMinimum": 0,
+            "title": "Sample Count",
+            "type": "integer"
+          },
+          "observation_days": {
+            "exclusiveMinimum": 0,
+            "title": "Observation Days",
+            "type": "integer"
+          },
+          "source_kind": {
+            "enum": [
+              "observed",
+              "assumed"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "hourly_load_method": {
+            "enum": [
+              "uniform_session_duration",
+              "measured_interval"
+            ],
+            "title": "Hourly Load Method",
+            "type": "string"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          }
+        },
+        "required": [
+          "hourly_sessions",
+          "hourly_count_variance",
+          "energy_quantiles_kwh",
+          "sample_count",
+          "observation_days",
+          "source_kind",
+          "hourly_load_method",
+          "provenance"
+        ],
+        "title": "SessionArrivalProfile",
+        "type": "object"
+      },
       "Site": {
         "additionalProperties": false,
         "properties": {
@@ -621,6 +695,17 @@
             "exclusiveMinimum": 0,
             "title": "Mean Session Kwh",
             "type": "number"
+          },
+          "arrival_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionArrivalProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "max_travel_minutes": {
             "exclusiveMinimum": 0,
@@ -1322,6 +1407,103 @@
           }
         }
       },
+      "DispatchSite": {
+        "type": "object",
+        "required": [
+          "site_id",
+          "load_kwh",
+          "grid_kwh",
+          "pv_used_kwh",
+          "pv_curtailed_kwh",
+          "battery_charge_kwh",
+          "battery_discharge_kwh",
+          "battery_soc_start_kwh",
+          "battery_soc_end_kwh"
+        ],
+        "properties": {
+          "site_id": {
+            "type": "string"
+          },
+          "load_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "grid_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "pv_used_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "pv_curtailed_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "battery_charge_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "battery_discharge_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "battery_soc_start_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "battery_soc_end_kwh": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "DispatchVerification": {
+        "type": "object",
+        "required": [
+          "passed",
+          "max_energy_balance_error_kwh_per_minute",
+          "max_grid_node_overload_kw",
+          "max_station_connection_overload_kw",
+          "max_equipment_overload_kw",
+          "max_storage_soc_violation_kwh",
+          "max_simultaneous_storage_kw",
+          "session_dispatch_energy_mismatch_kwh"
+        ],
+        "properties": {
+          "passed": {
+            "type": "boolean"
+          },
+          "max_energy_balance_error_kwh_per_minute": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_grid_node_overload_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_station_connection_overload_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_equipment_overload_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_storage_soc_violation_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_simultaneous_storage_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "session_dispatch_energy_mismatch_kwh": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
       "OptimizationResult": {
         "type": "object",
         "required": [
@@ -1511,6 +1693,9 @@
           "arrivals",
           "served_sessions",
           "refused_sessions",
+          "arrivals_by_hour",
+          "requested_energy_kwh",
+          "unserved_energy_kwh",
           "mean_wait_minutes",
           "p95_wait_minutes",
           "energy_kwh",
@@ -1519,6 +1704,8 @@
           "served_by_zone",
           "refused_by_zone",
           "energy_by_site_kwh",
+          "dispatch_by_site",
+          "dispatch_verification",
           "assumptions"
         ],
         "properties": {
@@ -1541,6 +1728,23 @@
           },
           "refused_sessions": {
             "type": "integer",
+            "minimum": 0
+          },
+          "arrivals_by_hour": {
+            "type": "array",
+            "minItems": 24,
+            "maxItems": 24,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "requested_energy_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unserved_energy_kwh": {
+            "type": "number",
             "minimum": 0
           },
           "mean_wait_minutes": {
@@ -1594,11 +1798,123 @@
               "minimum": 0
             }
           },
+          "dispatch_by_site": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DispatchSite"
+            }
+          },
+          "dispatch_verification": {
+            "$ref": "#/components/schemas/DispatchVerification"
+          },
           "assumptions": {
             "type": "array",
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "OperationalValidation": {
+        "type": "object",
+        "required": [
+          "scenario_id",
+          "year",
+          "seeds",
+          "optimized_service_fraction",
+          "simulated_service_fraction_mean",
+          "simulated_service_fraction_min",
+          "simulated_service_fraction_max",
+          "service_gap_percentage_points",
+          "requested_energy_kwh_mean",
+          "delivered_energy_kwh_mean",
+          "unserved_energy_kwh_mean"
+        ],
+        "properties": {
+          "scenario_id": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "seeds": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "optimized_service_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "simulated_service_fraction_mean": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "simulated_service_fraction_min": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "simulated_service_fraction_max": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "service_gap_percentage_points": {
+            "type": "number"
+          },
+          "requested_energy_kwh_mean": {
+            "type": "number",
+            "minimum": 0
+          },
+          "delivered_energy_kwh_mean": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unserved_energy_kwh_mean": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "OperationalEconomics": {
+        "type": "object",
+        "required": [
+          "scenario_id",
+          "seeds",
+          "optimized_npv_rub",
+          "simulated_npv_rub_mean",
+          "simulated_npv_rub_min",
+          "simulated_npv_rub_max",
+          "optimism_gap_rub",
+          "profitability_sign_changed"
+        ],
+        "properties": {
+          "scenario_id": {
+            "type": "string"
+          },
+          "seeds": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "optimized_npv_rub": {
+            "type": "number"
+          },
+          "simulated_npv_rub_mean": {
+            "type": "number"
+          },
+          "simulated_npv_rub_min": {
+            "type": "number"
+          },
+          "simulated_npv_rub_max": {
+            "type": "number"
+          },
+          "optimism_gap_rub": {
+            "type": "number"
+          },
+          "profitability_sign_changed": {
+            "type": "boolean"
           }
         }
       },
@@ -1610,7 +1926,9 @@
           "achieved_min_service_fraction",
           "same_investment_as_target",
           "optimization",
-          "simulation"
+          "simulation",
+          "operational_validation",
+          "operational_economics"
         ],
         "properties": {
           "target_service_fraction": {
@@ -1645,6 +1963,18 @@
             "items": {
               "$ref": "#/components/schemas/SimulationResult"
             }
+          },
+          "operational_validation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationalValidation"
+            }
+          },
+          "operational_economics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationalEconomics"
+            }
           }
         }
       },
@@ -1653,6 +1983,8 @@
         "required": [
           "optimization",
           "simulation",
+          "operational_validation",
+          "operational_economics",
           "explanations",
           "alternatives",
           "metadata"
@@ -1665,6 +1997,18 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SimulationResult"
+            }
+          },
+          "operational_validation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationalValidation"
+            }
+          },
+          "operational_economics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationalEconomics"
             }
           },
           "explanations": {

@@ -15,6 +15,7 @@ from .corridor import CorridorInput, check_corridor
 from .fleet import FleetInput, schedule_fleet
 from .optimizer import solve
 from .simulation import simulate
+from .validation import compare_economics, compare_operations, describe_input_quality
 
 app = FastAPI(title="Energy planning engine", version="1.0.0", docs_url=None, redoc_url=None)
 
@@ -31,6 +32,8 @@ class CalculationRequest(BaseModel):
         targets = self.alternative_service_fractions
         if any(not 0 <= value <= 1 for value in targets) or targets != sorted(set(targets)):
             raise ValueError("alternative_service_fractions must be unique, sorted values in [0,1]")
+        if any(seed < 0 for seed in self.simulation_seeds) or len(set(self.simulation_seeds)) != len(self.simulation_seeds):
+            raise ValueError("simulation_seeds must be unique nonnegative integers")
         return self
 
 
@@ -61,10 +64,13 @@ def calculate(request: CalculationRequest):
     result = solve(request.input)
     canonical = json.dumps(request.input.model_dump(mode="json"), ensure_ascii=False,
                            sort_keys=True, separators=(",", ":")).encode("utf-8")
-    output = {"optimization": result.as_dict(), "simulation": [], "explanations": [], "alternatives": [],
-              "metadata": {"model_version": "planner-mip-v2", "input_sha256": hashlib.sha256(canonical).hexdigest(),
+    output = {"optimization": result.as_dict(), "simulation": [], "operational_validation": [],
+              "operational_economics": [],
+              "explanations": [], "alternatives": [],
+              "metadata": {"model_version": "planner-mip-v3", "input_sha256": hashlib.sha256(canonical).hexdigest(),
                            "python_version": sys.version.split()[0], "pyomo_version": version("pyomo"),
                            "highspy_version": version("highspy"), "simulation_seeds": request.simulation_seeds,
+                           "input_quality": describe_input_quality(request.input),
                            "alternative_service_fractions": request.alternative_service_fractions,
                            "alternative_solver_seconds": request.alternative_solver_seconds}}
     if result.status not in ("optimal", "feasible"):
@@ -72,9 +78,15 @@ def calculate(request: CalculationRequest):
     for scenario in request.input.scenarios:
         for year in request.input.parameters.years:
             for seed in request.simulation_seeds:
-                output["simulation"].append(simulate(request.input, result.selected, year=year,
-                                                     scenario_id=scenario.id, seed=seed,
-                                                     grid_upgrades=result.grid_upgrades))
+                run = simulate(request.input, result.selected, year=year,
+                               scenario_id=scenario.id, seed=seed,
+                               grid_upgrades=result.grid_upgrades,
+                               battery=result.battery, solar=result.solar)
+                if not run["dispatch_verification"]["passed"]:
+                    raise HTTPException(status_code=500, detail="operational dispatch failed physical verification")
+                output["simulation"].append(run)
+    output["operational_validation"] = compare_operations(result, output["simulation"])
+    output["operational_economics"] = compare_economics(request.input, result, output["simulation"])
     if request.explain_top_n:
         output["explanations"] = explain_selected_sites(request.input, result, request.explain_top_n)
     if request.alternative_service_fractions:

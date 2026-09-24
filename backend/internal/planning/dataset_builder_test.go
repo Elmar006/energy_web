@@ -128,6 +128,55 @@ func TestBuildUsesExactVersionsWithoutInventingEnergyOrRoadTimes(t *testing.T) {
 	}
 }
 
+func TestBuildPreservesMeasuredSessionArrivalProfile(t *testing.T) {
+	repo, request := datasetBuildFixture()
+	dataset := repo.datasets[request.DatasetVersions.DemandZones]
+	var properties map[string]any
+	if err := json.Unmarshal(dataset.Features[0].Properties, &properties); err != nil {
+		t.Fatal(err)
+	}
+	arrivals := make([]float64, 24)
+	arrivals[12] = 1
+	properties["arrival_profile"] = map[string]any{
+		"hourly_sessions": arrivals, "hourly_count_variance": make([]float64, 24),
+		"energy_quantiles_kwh": func() []float64 {
+			values := make([]float64, 101)
+			for index := range values {
+				values[index] = 10
+			}
+			return values
+		}(),
+		"sample_count": 1, "observation_days": 1, "source_kind": "observed",
+		"hourly_load_method": "uniform_session_duration",
+		"provenance":         map[string]any{"kind": "derived", "source": "metered sessions"},
+	}
+	encoded, err := json.Marshal(properties)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataset.Features[0].Properties = encoded
+	repo.datasets[request.DatasetVersions.DemandZones] = dataset
+	prepared, err := (DatasetBuilder{Repository: repo, Validator: &fakeValidator{}}).Prepare(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result struct {
+		Zones []struct {
+			ArrivalProfile struct {
+				HourlySessions []float64 `json:"hourly_sessions"`
+				SourceKind     string    `json:"source_kind"`
+			} `json:"arrival_profile"`
+		} `json:"zones"`
+	}
+	if err := json.Unmarshal(prepared.Spec, &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Zones) != 1 || result.Zones[0].ArrivalProfile.HourlySessions[12] != 1 ||
+		result.Zones[0].ArrivalProfile.SourceKind != "observed" {
+		t.Fatalf("session arrival profile was not preserved: %s", prepared.Spec)
+	}
+}
+
 func TestBuildRejectsMissingOrContradictoryDataBeforeSaving(t *testing.T) {
 	for _, mutate := range []struct {
 		name   string

@@ -7,6 +7,7 @@ import json
 from .contracts import PlanningInput
 from .optimizer import solve
 from .simulation import simulate
+from .validation import compare_economics, compare_operations
 
 
 def calculate_alternatives(spec: PlanningInput, fractions: list[float],
@@ -27,7 +28,8 @@ def calculate_alternatives(spec: PlanningInput, fractions: list[float],
                 "achieved_min_service_fraction": (round(min(service_ratios, default=1), 6)
                                                    if result.status in ("optimal", "feasible") else None),
                 "same_investment_as_target": None,
-                "optimization": result.as_dict(), "simulation": []}
+                "optimization": result.as_dict(), "simulation": [],
+                "operational_validation": [], "operational_economics": []}
         if result.status in ("optimal", "feasible"):
             signature = json.dumps([result.selected, result.grid_upgrades, result.battery, result.solar],
                                    sort_keys=True, separators=(",", ":"))
@@ -39,9 +41,15 @@ def calculate_alternatives(spec: PlanningInput, fractions: list[float],
                 for scenario in spec.scenarios:
                     for year in spec.parameters.years:
                         for seed in seeds:
-                            item["simulation"].append(simulate(spec, result.selected, year=year,
-                                                               scenario_id=scenario.id, seed=seed,
-                                                               grid_upgrades=result.grid_upgrades))
+                            run = simulate(spec, result.selected, year=year,
+                                           scenario_id=scenario.id, seed=seed,
+                                           grid_upgrades=result.grid_upgrades,
+                                           battery=result.battery, solar=result.solar)
+                            if not run["dispatch_verification"]["passed"]:
+                                raise RuntimeError("alternative operational dispatch failed physical verification")
+                            item["simulation"].append(run)
                 simulations_by_investment[signature] = item["simulation"]
+            item["operational_validation"] = compare_operations(result, item["simulation"])
+            item["operational_economics"] = compare_economics(spec, result, item["simulation"])
         plans.append(item)
     return plans

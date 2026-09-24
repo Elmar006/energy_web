@@ -52,7 +52,8 @@ a { color: inherit; }
 .app-header { height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 clamp(24px, 4vw, 64px); border-bottom: 1px solid var(--border); background: var(--surface-header); }
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .brand strong { font-size: 19px; letter-spacing: -.055em; font-weight: 740; }
-.brand-mark { display: grid; place-items: center; width: 48px; height: 48px; background: var(--accent); color: var(--accent-text); border-radius: var(--radius-md); }
+.brand-mark { display: grid; place-items: center; width: 48px; height: 48px; overflow: hidden; background: #091827; border-radius: var(--radius-md); }
+.brand-mark img { width: 100%; height: 100%; object-fit: cover; }
 .brand-mark.small { width: 34px; height: 34px; border-radius: var(--radius-sm); }
 .brand-divider { width: 1px; height: 25px; margin: 0 7px; background: var(--border); }
 .brand-caption { font-size: 12px; color: var(--muted); letter-spacing: .01em; white-space: nowrap; }
