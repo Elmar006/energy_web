@@ -158,6 +158,20 @@
             ],
             "default": null,
             "title": "Captured At"
+          },
+          "transform_version": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Transform Version"
           }
         },
         "required": [
@@ -2036,7 +2050,8 @@
           "kind",
           "source",
           "checksum",
-          "created_at"
+          "created_at",
+          "format"
         ],
         "properties": {
           "id": {
@@ -2065,6 +2080,20 @@
           },
           "checksum": {
             "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "geojson",
+              "csv"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "demand_sessions",
+              "grid_headroom"
+            ]
           },
           "captured_at": {
             "type": [
@@ -2291,6 +2320,39 @@
           },
           "data_quality": {
             "$ref": "#/components/schemas/DataQuality"
+          }
+        }
+      },
+      "PlanningCSVImportResult": {
+        "type": "object",
+        "required": [
+          "scenario",
+          "dataset_id",
+          "role",
+          "sha256",
+          "reused"
+        ],
+        "properties": {
+          "scenario": {
+            "$ref": "#/components/schemas/SavedScenario"
+          },
+          "dataset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "demand_sessions",
+              "grid_headroom"
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "reused": {
+            "type": "boolean"
           }
         }
       }
@@ -2592,6 +2654,289 @@
             }
           },
           "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios/{id}/imports/sessions": {
+      "post": {
+        "summary": "Derive an immutable scenario from uploaded charging sessions CSV",
+        "description": "Sessions are completed charging, not latent unmet demand. The original CSV bytes are stored under dataset_id. Upload does not start a calculation; use the new scenario id with /runs.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scenario_name",
+                  "dataset_name",
+                  "source",
+                  "kind",
+                  "time_zone",
+                  "file",
+                  "start_date",
+                  "end_date"
+                ],
+                "properties": {
+                  "scenario_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "dataset_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "assumed"
+                    ]
+                  },
+                  "time_zone": {
+                    "type": "string",
+                    "description": "IANA zone; must match scenario time_zone if set"
+                  },
+                  "license": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "end_date": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningCSVImportResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios/{id}/imports/grid-headroom": {
+      "post": {
+        "summary": "Derive an immutable scenario from uploaded hourly grid headroom CSV",
+        "description": "Requires all 24 hours for each grid node. headroom_kw is available connection reserve, not background load or AC power-flow verification.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scenario_name",
+                  "dataset_name",
+                  "source",
+                  "kind",
+                  "time_zone",
+                  "file",
+                  "profile_date"
+                ],
+                "properties": {
+                  "scenario_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "dataset_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "assumed"
+                    ]
+                  },
+                  "time_zone": {
+                    "type": "string",
+                    "description": "IANA zone; must match scenario time_zone if set"
+                  },
+                  "license": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "profile_date": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanningCSVImportResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -3035,6 +3380,65 @@
             }
           },
           "413": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/datasets/{id}/file": {
+      "get": {
+        "summary": "Download exact original CSV bytes of a planning data upload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Uploaded CSV",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "Success",
             "content": {
               "application/json": {

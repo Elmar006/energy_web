@@ -200,11 +200,13 @@ schemas = {
                                   "explanations": {"type": "array", "items": {"type": "object"}},
                                   "alternatives": {"type": "array", "items": ref("AlternativePlan")},
                                   "metadata": {"type": "object"}}},
-    "DatasetManifest": {"type": "object", "required": ["id", "name", "kind", "source", "checksum", "created_at"],
+    "DatasetManifest": {"type": "object", "required": ["id", "name", "kind", "source", "checksum", "created_at", "format"],
                         "properties": {"id": {"type": "string", "format": "uuid"},
                                        "name": {"type": "string"}, "kind": {"type": "string", "enum": ["observed", "derived", "assumed"]},
                                        "source": {"type": "string"}, "license": {"type": ["string", "null"]},
                                        "checksum": {"type": "string"},
+                                       "format": {"type": "string", "enum": ["geojson", "csv"]},
+                                       "role": {"type": "string", "enum": ["demand_sessions", "grid_headroom"]},
                                        "captured_at": {"type": ["string", "null"], "format": "date-time"},
                                        "created_at": {"type": "string", "format": "date-time"}}},
     "DatasetImportResult": {"type": "object", "required": ["dataset_id", "features", "sha256"],
@@ -241,6 +243,13 @@ schemas = {
         "properties": {"spec": ref("ScenarioSpec"), "data_quality": ref("DataQuality")}},
     "SavedDatasetScenario": {"type": "object", "required": ["scenario", "data_quality"],
         "properties": {"scenario": ref("SavedScenario"), "data_quality": ref("DataQuality")}},
+    "PlanningCSVImportResult": {"type": "object", "required": [
+        "scenario", "dataset_id", "role", "sha256", "reused"],
+        "properties": {"scenario": ref("SavedScenario"),
+                       "dataset_id": {"type": "string", "format": "uuid"},
+                       "role": {"type": "string", "enum": ["demand_sessions", "grid_headroom"]},
+                       "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                       "reused": {"type": "boolean"}}},
 }
 
 uuid_param = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
@@ -248,6 +257,26 @@ error_responses = {"401": response(ref("Error"), "Authentication required"),
                    "422": response(ref("Error"), "Invalid input")}
 spec_create = {"type": "object", "required": ["name", "spec"], "properties": {
     "name": {"type": "string", "minLength": 1, "maxLength": 120}, "spec": ref("ScenarioSpec")}}
+
+
+def planning_csv_import(role: str) -> dict:
+    common = {"scenario_name": {"type": "string", "minLength": 1, "maxLength": 120},
+              "dataset_name": {"type": "string", "minLength": 1, "maxLength": 120},
+              "source": {"type": "string", "minLength": 1, "maxLength": 2048},
+              "kind": {"type": "string", "enum": ["observed", "assumed"]},
+              "time_zone": {"type": "string", "description": "IANA zone; must match scenario time_zone if set"},
+              "license": {"type": "string", "maxLength": 2048},
+              "file": {"type": "string", "format": "binary"}}
+    if role == "demand_sessions":
+        common.update({"start_date": {"type": "string", "format": "date"},
+                       "end_date": {"type": "string", "format": "date"}})
+    else:
+        common["profile_date"] = {"type": "string", "format": "date"}
+    required = ["scenario_name", "dataset_name", "source", "kind", "time_zone", "file"]
+    required += ["start_date", "end_date"] if role == "demand_sessions" else ["profile_date"]
+    return {"required": True, "content": {"multipart/form-data": {"schema": {
+        "type": "object", "additionalProperties": False,
+        "required": required, "properties": common}}}}
 
 document = {
     "openapi": "3.1.0",
@@ -276,6 +305,20 @@ document = {
                           "404": response(ref("Error")), "503": response(ref("Error")), **error_responses}}},
         "/api/v1/scenarios/{id}": {"get": {"summary": "Get scenario", "parameters": [uuid_param],
             "responses": {"200": response(ref("SavedScenario")), "404": response(ref("Error")), **error_responses}}},
+        "/api/v1/scenarios/{id}/imports/sessions": {"post": {
+            "summary": "Derive an immutable scenario from uploaded charging sessions CSV",
+            "description": "Sessions are completed charging, not latent unmet demand. The original CSV bytes are stored under dataset_id. Upload does not start a calculation; use the new scenario id with /runs.",
+            "parameters": [uuid_param], "requestBody": planning_csv_import("demand_sessions"),
+            "responses": {"201": response(ref("PlanningCSVImportResult")),
+                          "404": response(ref("Error")), "413": response(ref("Error")),
+                          "503": response(ref("Error")), **error_responses}}},
+        "/api/v1/scenarios/{id}/imports/grid-headroom": {"post": {
+            "summary": "Derive an immutable scenario from uploaded hourly grid headroom CSV",
+            "description": "Requires all 24 hours for each grid node. headroom_kw is available connection reserve, not background load or AC power-flow verification.",
+            "parameters": [uuid_param], "requestBody": planning_csv_import("grid_headroom"),
+            "responses": {"201": response(ref("PlanningCSVImportResult")),
+                          "404": response(ref("Error")), "413": response(ref("Error")),
+                          "503": response(ref("Error")), **error_responses}}},
         "/api/v1/scenarios/{id}/runs": {"post": {"summary": "Queue idempotent calculation",
             "parameters": [uuid_param, {"name": "Idempotency-Key", "in": "header", "required": True,
                                        "schema": {"type": "string", "minLength": 8, "maxLength": 128}}],
@@ -305,6 +348,12 @@ document = {
                     "file": {"type": "string", "format": "binary"}}}}}},
             "responses": {"201": response(ref("DatasetImportResult")),
                           "413": response(ref("Error")), **error_responses}}},
+        "/api/v1/datasets/{id}/file": {"get": {
+            "summary": "Download exact original CSV bytes of a planning data upload",
+            "parameters": [uuid_param], "responses": {
+                "200": {"description": "Uploaded CSV", "content": {"text/csv": {
+                    "schema": {"type": "string", "format": "binary"}}}},
+                "404": response(ref("Error")), **error_responses}}},
         "/api/v1/map": {"get": {"summary": "GeoJSON in bounding box", "parameters": [
             {"name": "bbox", "in": "query", "required": True, "schema": {"type": "string"},
              "description": "west,south,east,north in WGS84"},

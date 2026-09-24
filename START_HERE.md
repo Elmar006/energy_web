@@ -1,6 +1,6 @@
 # Запуск EV Infrastructure: Docker, `.env`, данные и проверка
 
-> **Текущий статус данных.** Встроенный пилот на координатах Екатеринбурга использует **синтетические** спрос, площадки, цены и ограничения мощности. Это проверка работы приложения и алгоритмов, а не готовый инвестиционный расчёт для города. Загрузка собственного GeoJSON уже работает, но сама по себе пока не превращает географические объекты в проверенные данные о спросе и свободной мощности сети. Текущие границы реализации перечислены в [статусе проекта](docs/IMPLEMENTATION_STATUS.md).
+> **Текущий статус данных.** Встроенный пилот использует **синтетические** спрос, площадки, цены и ограничения мощности. Это проверка работы приложения и алгоритмов, а не готовый инвестиционный расчёт для города. Через Go API можно загрузить собственные GeoJSON, CSV зарядных сессий и почасового резерва сети; расчёт использует сохранённые версии. Качество результата всё равно зависит от подтверждения источников и полноты входов. Текущие границы реализации перечислены в [статусе проекта](docs/IMPLEMENTATION_STATUS.md).
 
 ## 1. Что нужно установить
 
@@ -59,7 +59,9 @@ docker compose ps
 
 Для **риска с обоснованными вероятностями** укажите `probability` у каждого сценария; сумма должна быть равна 1. Режим `parameters.risk = "expected_cvar"` максимизирует ожидаемый результат при ограничении верхнего хвоста потерь. Укажите `cvar_alpha` между 0 и 1 и ровно один порог по режиму: `max_cvar_loss_rub` для оператора (убыток NPV ниже нуля, ₽) или `max_cvar_unmet_kwh` для города (необслуженная энергия за модельный горизонт, кВт·ч). Например, `cvar_alpha = 0.9` ограничивает средние потери в худших 10% вероятности по заданным сценариям. Без обоснованных вероятностей оставьте `risk = "worst_case"`; инструмент не выдумывает их из воздуха.
 
-Если есть выгрузка **фактических зарядных сессий**, профиль выполненных зарядок и отдельно часы прибытия можно получить воспроизводимым адаптером. CSV содержит `session_id,zone_id,started_at,ended_at,energy_kwh`; даты обязательно с UTC-смещением, `zone_id` должен совпадать с зоной в исходном сценарии. Для проверки формата есть [синтетический CSV](examples/sessions_sample.csv). Пример без локальной установки Python:
+Если есть выгрузка **фактических зарядных сессий**, её теперь можно загрузить **напрямую через API**, получить новый неизменяемый сценарий и запустить расчёт по его ID. Так же загружается CSV доступного резерва сети. Пошаговые команды для PowerShell и WSL, поля запросов, сохранение исходных файлов и проверка результата приведены в [руководстве по прямой загрузке](docs/DIRECT_UPLOAD.md). UI-форма для этих двух CSV — задача фронтенда по [контракту](docs/frontend/BACKEND_HANDOFF.md); бэкенд уже поддерживает полный путь загрузка → версия → сценарий → расчёт.
+
+CLI остаётся способом подготовить JSON офлайн. CSV сессий содержит `session_id,zone_id,started_at,ended_at,energy_kwh`; даты обязательно с UTC-смещением, `zone_id` должен совпадать с зоной в исходном сценарии. Для проверки формата есть [синтетический CSV](examples/sessions_sample.csv). Пример без локальной установки Python:
 
 ```text
 docker run --rm -v E:/energy:/workspace -w /workspace/engine energy-engine python -m energy.ingest_sessions --scenario /workspace/examples/import_sample.json --sessions /workspace/examples/sessions_sample.csv --output /workspace/examples/derived_local.json --source "Синтетическая проверка формата" --time-zone Europe/Moscow --start-date 2027-04-01 --end-date 2027-04-01 --kind assumed
@@ -164,12 +166,16 @@ docker compose logs --tail=100 api worker engine frontend
 
 ```text
 python scripts/smoke.py
+python scripts/smoke_dataset_builder.py
+python scripts/smoke_uploaded_data.py
 ```
 
-Он создаёт **тестовые** сценарии и задачи в локальной БД и проверяет API → worker → HiGHS → SimPy → веб-маршруты. При нестандартных `API_TOKEN` и `APP_DEMO_PASSWORD` экспортируйте эти переменные в текущую оболочку перед запуском. Альтернатива без Python на хосте:
+Они создают **тестовые** сценарии и задачи в локальной БД и проверяют API → worker → HiGHS → SimPy → веб-маршруты, сборку из версий GeoJSON и прямую загрузку CSV → расчёт. При нестандартных `API_TOKEN` и `APP_DEMO_PASSWORD` экспортируйте эти переменные в текущую оболочку перед запуском. Альтернатива без Python на хосте:
 
 ```text
 docker run --rm --network energy_default --env-file .env -v E:/energy:/workspace -w /workspace -e ENERGY_API_URL=http://api:8080 -e ENERGY_FRONTEND_URL=http://frontend:3000 energy-engine python scripts/smoke.py
+docker run --rm --network energy_default --env-file .env -v E:/energy:/workspace -w /workspace -e ENERGY_API_URL=http://api:8080 energy-engine python scripts/smoke_dataset_builder.py
+docker run --rm --network energy_default --env-file .env -v E:/energy:/workspace -w /workspace -e ENERGY_API_URL=http://api:8080 energy-engine python scripts/smoke_uploaded_data.py
 ```
 
 Если построен локальный JSON с реальной дорожной матрицей, добавьте к той же команде `-e ENERGY_EXTRA_SCENARIO=/workspace/examples/monaco_road_local.json` **до** имени образа `energy-engine`: smoke-тест дополнительно сохранит, рассчитает и проверит этот сценарий.

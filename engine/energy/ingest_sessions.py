@@ -23,6 +23,7 @@ import numpy as np
 from .contracts import DatasetReference, PlanningInput, Provenance, SessionArrivalProfile
 
 REQUIRED_COLUMNS = {"session_id", "zone_id", "started_at", "ended_at", "energy_kwh"}
+TRANSFORM_VERSION = "metered-sessions-v2"
 
 
 def derive_demand(
@@ -139,6 +140,7 @@ def derive_demand(
     result.datasets.append(DatasetReference(
         name="Зарядные сессии", role="demand_sessions", kind=kind,
         source=source, sha256=checksum, license=license,
+        transform_version=TRANSFORM_VERSION,
     ))
     return result
 

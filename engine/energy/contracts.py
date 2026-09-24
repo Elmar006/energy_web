@@ -24,6 +24,7 @@ class DatasetReference(FiniteModel):
     version_id: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
     license: str | None = None
     captured_at: str | None = None
+    transform_version: str | None = Field(default=None, min_length=1, max_length=80)
 
 
 class SessionArrivalProfile(FiniteModel):

@@ -16,6 +16,8 @@ type Dataset struct {
 	Source     string     `json:"source"`
 	License    *string    `json:"license,omitempty"`
 	Checksum   string     `json:"checksum"`
+	Format     string     `json:"format"`
+	Role       *string    `json:"role,omitempty"`
 	CapturedAt *time.Time `json:"captured_at,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 }
