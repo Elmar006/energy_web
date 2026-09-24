@@ -48,7 +48,14 @@ def main() -> None:
     ids = {
         "demand_zones": upload("demand_zones", point("z1", "demand_zone", {
             "name": "Synthetic zone", "hourly_kwh": [0] * 12 + [10] + [0] * 11,
-            "mean_session_kwh": 10, "max_travel_minutes": 20,
+            "mean_session_kwh": 10, "arrival_profile": {
+                "hourly_sessions": [0] * 12 + [1] + [0] * 11,
+                "hourly_count_variance": [0] * 24,
+                "energy_quantiles_kwh": [10] * 101,
+                "sample_count": 1, "observation_days": 1,
+                "source_kind": "assumed", "hourly_load_method": "uniform_session_duration",
+                "provenance": {"source": "synthetic dataset-builder smoke fixture", "kind": "derived"},
+            }, "max_travel_minutes": 20,
             "time_zone": time_zone}), label),
         "candidate_sites": upload("candidate_sites", point("s1", "candidate_site", {
             "name": "Synthetic site", "grid_node_id": "g1", "option_ids": ["dc"]}), label),
@@ -92,6 +99,7 @@ def main() -> None:
     except HTTPError as error:
         raise AssertionError(f"dataset preview failed: {error.code} {error.read().decode()}") from error
     assert preview["spec"]["time_zone"] == "Europe/Moscow"
+    assert preview["spec"]["zones"][0]["arrival_profile"]["hourly_sessions"][12] == 1
     assert len(preview["data_quality"]["datasets"]) == 4
     assert all(row["kind"] == "assumed" for row in preview["data_quality"]["datasets"])
     assert {row["version_id"] for row in preview["data_quality"]["datasets"]} == set(ids.values())
@@ -114,6 +122,7 @@ def main() -> None:
     assert result["optimization"]["selected"][0]["site_id"] == "s1"
     assert result["optimization"]["served_kwh"]["base"] == 10
     assert result["optimization"]["verification"]["passed"] is True
+    assert result["metadata"]["input_quality"]["demand_scope"] == "assumed_session_profiles"
     print(json.dumps({"scenario_id": scenario["id"], "run_id": run["id"],
                       "dataset_versions": ids}, ensure_ascii=False))
 

@@ -9,6 +9,9 @@ def test_public_openapi_contract_has_resolved_component_references():
     assert "/api/v1/scenarios" in document["paths"]
     assert "/api/v1/scenarios/from-datasets/preview" in document["paths"]
     assert "/api/v1/scenarios/from-datasets" in document["paths"]
+    assert "/api/v1/scenarios/{id}/imports/sessions" in document["paths"]
+    assert "/api/v1/scenarios/{id}/imports/grid-headroom" in document["paths"]
+    assert "/api/v1/datasets/{id}/file" in document["paths"]
     assert "/api/v1/datasets/import" in document["paths"]
     assert "/api/v1/fleets/schedule" in document["paths"]
     assert "/api/v1/corridors/check" in document["paths"]
@@ -18,6 +21,11 @@ def test_public_openapi_contract_has_resolved_component_references():
     assert schemas["PlanResult"]["properties"]["simulation"]["items"]["$ref"].endswith("/SimulationResult")
     assert "cvar_loss_rub" in schemas["RiskMetrics"]["properties"]
     assert "partial_energy_kwh" in schemas["SimulationResult"]["properties"]
+    assert "arrival_profile" in schemas["Zone"]["properties"]
+    assert "hourly_load_method" in schemas["SessionArrivalProfile"]["required"]
+    assert "requested_energy_kwh" in schemas["SimulationResult"]["required"]
+    assert schemas["PlanResult"]["properties"]["operational_validation"]["items"]["$ref"].endswith("/OperationalValidation")
+    assert schemas["PlanResult"]["properties"]["operational_economics"]["items"]["$ref"].endswith("/OperationalEconomics")
     assert schemas["OptimizationResult"]["properties"]["energy_audit"]["items"]["$ref"].endswith("/EnergyAudit")
     assert "max_hourly_energy_balance_error_kwh" in schemas["PhysicalVerification"]["properties"]
     assert "upgrade_lead_years" in schemas["GridNode"]["properties"]

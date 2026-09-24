@@ -24,6 +24,36 @@ class DatasetReference(FiniteModel):
     version_id: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
     license: str | None = None
     captured_at: str | None = None
+    transform_version: str | None = Field(default=None, min_length=1, max_length=80)
+
+
+class SessionArrivalProfile(FiniteModel):
+    """Supplied sessions starting in each local hour of a representative day.
+
+    Quantiles are the empirical inverse CDF at probabilities 0, 0.01, ..., 1.
+    They describe *delivered* session energy, not unobserved demand.
+    """
+
+    hourly_sessions: list[float] = Field(min_length=24, max_length=24)
+    hourly_count_variance: list[float] = Field(min_length=24, max_length=24)
+    energy_quantiles_kwh: list[float] = Field(min_length=101, max_length=101)
+    sample_count: int = Field(gt=0)
+    observation_days: int = Field(gt=0)
+    source_kind: Literal["observed", "assumed"]
+    hourly_load_method: Literal["uniform_session_duration", "measured_interval"]
+    provenance: Provenance
+
+    @model_validator(mode="after")
+    def check_profile(self):
+        if any(value < 0 for value in self.hourly_sessions + self.hourly_count_variance):
+            raise ValueError("session arrivals and count variance cannot be negative")
+        if any(value <= 0 for value in self.energy_quantiles_kwh):
+            raise ValueError("session energy quantiles must be positive")
+        if self.energy_quantiles_kwh != sorted(self.energy_quantiles_kwh):
+            raise ValueError("session energy quantiles must be nondecreasing")
+        if abs(sum(self.hourly_sessions) * self.observation_days - self.sample_count) > 1e-5:
+            raise ValueError("session arrivals must conserve the observed session count")
+        return self
 
 
 class Zone(FiniteModel):
@@ -34,6 +64,7 @@ class Zone(FiniteModel):
     group: Literal["private", "taxi", "fleet", "corridor"] = "private"
     hourly_kwh: list[float] = Field(min_length=24, max_length=24)
     mean_session_kwh: float = Field(gt=0)
+    arrival_profile: SessionArrivalProfile | None = None
     max_travel_minutes: float = Field(gt=0)
     provenance: Provenance
 
@@ -41,6 +72,12 @@ class Zone(FiniteModel):
     def check_demand(self):
         if any(value < 0 for value in self.hourly_kwh):
             raise ValueError("hourly_kwh cannot be negative")
+        if self.arrival_profile is not None:
+            profile = self.arrival_profile
+            metered_daily = sum(self.hourly_kwh)
+            sessions_daily = self.mean_session_kwh * sum(profile.hourly_sessions)
+            if abs(metered_daily - sessions_daily) > max(1e-5, 1e-6 * metered_daily):
+                raise ValueError("hourly metered energy and arrival profile must conserve session energy")
         return self
 
 

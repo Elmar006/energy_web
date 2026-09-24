@@ -15,6 +15,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .contracts import DatasetReference, PlanningInput, Provenance
 
+TRANSFORM_VERSION = "grid-headroom-v1"
+
 
 def apply_grid_profile(
     planning_input: PlanningInput,
@@ -79,6 +81,7 @@ def apply_grid_profile(
         name="Почасовой резерв мощности узлов", role="grid", kind=kind,
         source=f"{source}; {profile_date}; {time_zone}", sha256=checksum,
         license=license,
+        transform_version=TRANSFORM_VERSION,
     ))
     return result
 

@@ -70,6 +70,7 @@ jobs:
           docker compose up -d --build
           python scripts/smoke.py
           python scripts/smoke_dataset_builder.py
+          python scripts/smoke_uploaded_data.py
       - name: Browser dependencies
         working-directory: frontend
         run: npx playwright install --with-deps chromium

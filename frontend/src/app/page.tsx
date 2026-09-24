@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { Activity, ArrowRight, BatteryCharging, Check, ChevronRight, Clock3, Info, LogOut, MapPinned, ShieldCheck, Zap } from "lucide-react";
 import type { Mode } from "@/lib/demo";
 import { makeDemo } from "@/lib/demo";
@@ -176,9 +177,9 @@ export default function Home() {
   if (signedIn === null) return <main className="screen-centered"><p>Загружаем рабочее пространство…</p></main>;
   if (!signedIn) return (
     <main className="screen-centered"><div className="login-panel">
-      <div className="brand-mark"><Zap size={23} strokeWidth={2.4} /></div>
+      <div className="brand-mark"><Image src="/brand-logo.png" width={48} height={48} alt="" /></div>
       <p className="eyebrow">Платформа планирования</p>
-      <h1>Вектор</h1>
+      <h1>EV Infrastructure</h1>
       <p>Инженерные решения для зарядной сети, проверенные моделированием.</p>
       <form onSubmit={login}>
         <label htmlFor="password">Пароль доступа</label>
@@ -202,7 +203,7 @@ export default function Home() {
 
   return <div className="app-shell">
     <header className="app-header">
-      <div className="brand"><span className="brand-mark small"><Zap size={19} strokeWidth={2.4} /></span><strong>Вектор</strong><span className="brand-divider" /><span className="brand-caption">Планирование инфраструктуры</span></div>
+      <div className="brand"><span className="brand-mark small"><Image src="/brand-logo.png" width={34} height={34} alt="" /></span><strong>EV Infrastructure</strong><span className="brand-divider" /><span className="brand-caption">Планирование инфраструктуры</span></div>
       <div className="header-status"><span className="status-pulse" aria-hidden="true" /><span className="header-status-label">Демо-доступ</span><button type="button" className="logout-button" onClick={logout} aria-label="Выйти из рабочего пространства" title="Выйти"><LogOut size={16} /></button></div>
     </header>
 

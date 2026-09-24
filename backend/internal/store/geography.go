@@ -28,8 +28,10 @@ func (s *Store) ImportDataset(ctx context.Context, reader io.Reader, meta geogra
 }
 
 func (s *Store) Datasets(ctx context.Context) ([]Dataset, error) {
-	rows, err := s.DB.Query(ctx, `SELECT id::text,name,kind,source,license,checksum,captured_at,created_at
-		FROM dataset_versions ORDER BY created_at DESC,id DESC LIMIT 100`)
+	rows, err := s.DB.Query(ctx, `SELECT d.id::text,d.name,d.kind,d.source,d.license,d.checksum,
+		d.captured_at,d.created_at,CASE WHEN u.dataset_version_id IS NULL THEN 'geojson' ELSE 'csv' END,
+		u.role FROM dataset_versions d LEFT JOIN uploaded_csv u ON u.dataset_version_id=d.id
+		ORDER BY d.created_at DESC,d.id DESC LIMIT 100`)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +39,8 @@ func (s *Store) Datasets(ctx context.Context) ([]Dataset, error) {
 	out := []Dataset{}
 	for rows.Next() {
 		var d Dataset
-		if err := rows.Scan(&d.ID, &d.Name, &d.Kind, &d.Source, &d.License, &d.Checksum, &d.CapturedAt, &d.CreatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.Name, &d.Kind, &d.Source, &d.License, &d.Checksum,
+			&d.CapturedAt, &d.CreatedAt, &d.Format, &d.Role); err != nil {
 			return nil, err
 		}
 		out = append(out, d)

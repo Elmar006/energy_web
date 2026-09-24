@@ -18,9 +18,12 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 from zoneinfo import ZoneInfoNotFoundError
 
-from .contracts import DatasetReference, PlanningInput, Provenance
+import numpy as np
+
+from .contracts import DatasetReference, PlanningInput, Provenance, SessionArrivalProfile
 
 REQUIRED_COLUMNS = {"session_id", "zone_id", "started_at", "ended_at", "energy_kwh"}
+TRANSFORM_VERSION = "metered-sessions-v2"
 
 
 def derive_demand(
@@ -55,6 +58,8 @@ def derive_demand(
     zone_ids = {item.id for item in planning_input.zones}
     totals = {item.id: [0.0] * 24 for item in planning_input.zones}
     counts = {item.id: 0 for item in planning_input.zones}
+    daily_arrivals: dict[str, dict[date, list[int]]] = {item.id: {} for item in planning_input.zones}
+    session_energies: dict[str, list[float]] = {item.id: [] for item in planning_input.zones}
     seen: set[str] = set()
     window_start = datetime.combine(start_date, datetime.min.time(), zone)
     window_end = datetime.combine(end_date + timedelta(days=1), datetime.min.time(), zone)
@@ -96,6 +101,10 @@ def derive_demand(
         if not math.isclose(allocated, energy, rel_tol=1e-10, abs_tol=1e-8):
             raise ArithmeticError(f"row {row_number}: energy was not conserved")
         counts[zone_id] += 1
+        local_start = started_utc.astimezone(zone)
+        local_day = daily_arrivals[zone_id].setdefault(local_start.date(), [0] * 24)
+        local_day[local_start.hour] += 1
+        session_energies[zone_id].append(energy)
 
     missing = sorted(zone_id for zone_id, count in counts.items() if count == 0)
     if missing:
@@ -105,14 +114,33 @@ def derive_demand(
     result = planning_input.model_copy(deep=True)
     for item in result.zones:
         item.hourly_kwh = [value / days for value in totals[item.id]]
+        energies = session_energies[item.id]
+        item.mean_session_kwh = sum(energies) / len(energies)
         item.provenance = Provenance(
             kind="derived",
             source=f"{source}; CSV SHA-256 {checksum}; {start_date}..{end_date}; "
                    f"{time_zone}; input_kind={kind}; session energy apportioned by duration",
         )
+        daily = [daily_arrivals[item.id].get(start_date + timedelta(days=day), [0] * 24)
+                 for day in range(days)]
+        arrivals = [sum(row[hour] for row in daily) / days for hour in range(24)]
+        variances = [float(np.var([row[hour] for row in daily], ddof=1)) if days > 1 else 0.0
+                     for hour in range(24)]
+        item.arrival_profile = SessionArrivalProfile(
+            hourly_sessions=arrivals,
+            hourly_count_variance=variances,
+            energy_quantiles_kwh=[float(value) for value in np.quantile(
+                energies, np.linspace(0, 1, 101), method="inverted_cdf")],
+            sample_count=len(energies), observation_days=days, source_kind=kind,
+            hourly_load_method="uniform_session_duration",
+            provenance=Provenance(kind="derived",
+                                  source=f"{source}; CSV SHA-256 {checksum}; {start_date}..{end_date}; "
+                                         f"{time_zone}; input_kind={kind}; starts and delivered session energy"),
+        )
     result.datasets.append(DatasetReference(
         name="Зарядные сессии", role="demand_sessions", kind=kind,
         source=source, sha256=checksum, license=license,
+        transform_version=TRANSFORM_VERSION,
     ))
     return result
 

@@ -79,6 +79,26 @@ schemas = {
             "max_budget_overrun_rub", "max_service_floor_shortfall_kwh")},
         "energy_audit_rows_total": {"type": "integer", "minimum": 0},
         "energy_audit_truncated": {"type": "boolean"}, "passed": {"type": "boolean"}}},
+    "DispatchSite": {"type": "object", "required": [
+        "site_id", "load_kwh", "grid_kwh", "pv_used_kwh", "pv_curtailed_kwh",
+        "battery_charge_kwh", "battery_discharge_kwh", "battery_soc_start_kwh",
+        "battery_soc_end_kwh"],
+        "properties": {"site_id": {"type": "string"},
+            **{name: {"type": "number", "minimum": 0} for name in (
+                "load_kwh", "grid_kwh", "pv_used_kwh", "pv_curtailed_kwh",
+                "battery_charge_kwh", "battery_discharge_kwh",
+                "battery_soc_start_kwh", "battery_soc_end_kwh")}}},
+    "DispatchVerification": {"type": "object", "required": [
+        "passed", "max_energy_balance_error_kwh_per_minute", "max_grid_node_overload_kw",
+        "max_station_connection_overload_kw", "max_equipment_overload_kw",
+        "max_storage_soc_violation_kwh", "max_simultaneous_storage_kw",
+        "session_dispatch_energy_mismatch_kwh"],
+        "properties": {"passed": {"type": "boolean"},
+            **{name: {"type": "number", "minimum": 0} for name in (
+                "max_energy_balance_error_kwh_per_minute", "max_grid_node_overload_kw",
+                "max_station_connection_overload_kw", "max_equipment_overload_kw",
+                "max_storage_soc_violation_kwh", "max_simultaneous_storage_kw",
+                "session_dispatch_energy_mismatch_kwh")}}},
     "OptimizationResult": {"type": "object", "required": [
         "status", "objective", "gap", "selected", "grid_upgrades", "battery", "solar",
         "served_kwh", "unmet_kwh", "cashflow_rub", "diagnostic", "risk_metrics",
@@ -109,13 +129,19 @@ schemas = {
             "verification": ref("PhysicalVerification")}},
     "SimulationResult": {"type": "object", "required": [
         "year", "scenario_id", "seed", "arrivals", "served_sessions", "refused_sessions",
+        "arrivals_by_hour", "requested_energy_kwh", "unserved_energy_kwh",
         "mean_wait_minutes", "p95_wait_minutes", "energy_kwh", "partial_energy_kwh",
-        "last_completion_minute", "served_by_zone", "refused_by_zone", "energy_by_site_kwh", "assumptions"],
+        "last_completion_minute", "served_by_zone", "refused_by_zone", "energy_by_site_kwh",
+        "dispatch_by_site", "dispatch_verification", "assumptions"],
         "properties": {
             "year": {"type": "integer"}, "scenario_id": {"type": "string"}, "seed": {"type": "integer"},
             "arrivals": {"type": "integer", "minimum": 0},
             "served_sessions": {"type": "integer", "minimum": 0},
             "refused_sessions": {"type": "integer", "minimum": 0},
+            "arrivals_by_hour": {"type": "array", "minItems": 24, "maxItems": 24,
+                                 "items": {"type": "integer", "minimum": 0}},
+            "requested_energy_kwh": {"type": "number", "minimum": 0},
+            "unserved_energy_kwh": {"type": "number", "minimum": 0},
             "mean_wait_minutes": {"type": ["number", "null"], "minimum": 0},
             "p95_wait_minutes": {"type": ["number", "null"], "minimum": 0},
             "energy_kwh": {"type": "number", "minimum": 0},
@@ -124,11 +150,38 @@ schemas = {
             "served_by_zone": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
             "refused_by_zone": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
             "energy_by_site_kwh": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}},
+            "dispatch_by_site": {"type": "array", "items": ref("DispatchSite")},
+            "dispatch_verification": ref("DispatchVerification"),
             "assumptions": {"type": "array", "items": {"type": "string"}}}},
+    "OperationalValidation": {"type": "object", "required": [
+        "scenario_id", "year", "seeds", "optimized_service_fraction",
+        "simulated_service_fraction_mean", "simulated_service_fraction_min",
+        "simulated_service_fraction_max", "service_gap_percentage_points",
+        "requested_energy_kwh_mean", "delivered_energy_kwh_mean", "unserved_energy_kwh_mean"],
+        "properties": {
+            "scenario_id": {"type": "string"}, "year": {"type": "integer"},
+            "seeds": {"type": "integer", "minimum": 1},
+            **{name: {"type": "number", "minimum": 0, "maximum": 1} for name in (
+                "optimized_service_fraction", "simulated_service_fraction_mean",
+                "simulated_service_fraction_min", "simulated_service_fraction_max")},
+            "service_gap_percentage_points": {"type": "number"},
+            **{name: {"type": "number", "minimum": 0} for name in (
+                "requested_energy_kwh_mean", "delivered_energy_kwh_mean",
+                "unserved_energy_kwh_mean")}}},
+    "OperationalEconomics": {"type": "object", "required": [
+        "scenario_id", "seeds", "optimized_npv_rub", "simulated_npv_rub_mean",
+        "simulated_npv_rub_min", "simulated_npv_rub_max", "optimism_gap_rub",
+        "profitability_sign_changed"],
+        "properties": {"scenario_id": {"type": "string"},
+                       "seeds": {"type": "integer", "minimum": 1},
+                       **{name: {"type": "number"} for name in (
+                           "optimized_npv_rub", "simulated_npv_rub_mean",
+                           "simulated_npv_rub_min", "simulated_npv_rub_max", "optimism_gap_rub")},
+                       "profitability_sign_changed": {"type": "boolean"}}},
     "AlternativePlan": {"type": "object", "required": [
         "target_service_fraction", "objective_kind", "achieved_min_service_fraction",
         "same_investment_as_target",
-        "optimization", "simulation"],
+        "optimization", "simulation", "operational_validation", "operational_economics"],
         "properties": {"target_service_fraction": {"type": "number", "minimum": 0, "maximum": 1},
                        "objective_kind": {"const": "minimum_investment_rub"},
                        "achieved_min_service_fraction": {"type": ["number", "null"],
@@ -136,18 +189,24 @@ schemas = {
                        "same_investment_as_target": {"type": ["number", "null"],
                                                      "minimum": 0, "maximum": 1},
                        "optimization": ref("OptimizationResult"),
-                       "simulation": {"type": "array", "items": ref("SimulationResult")}}},
-    "PlanResult": {"type": "object", "required": ["optimization", "simulation", "explanations", "alternatives", "metadata"],
+                       "simulation": {"type": "array", "items": ref("SimulationResult")},
+                       "operational_validation": {"type": "array", "items": ref("OperationalValidation")},
+                       "operational_economics": {"type": "array", "items": ref("OperationalEconomics")}}},
+    "PlanResult": {"type": "object", "required": ["optimization", "simulation", "operational_validation", "operational_economics", "explanations", "alternatives", "metadata"],
                    "properties": {"optimization": ref("OptimizationResult"),
                                   "simulation": {"type": "array", "items": ref("SimulationResult")},
+                                  "operational_validation": {"type": "array", "items": ref("OperationalValidation")},
+                                  "operational_economics": {"type": "array", "items": ref("OperationalEconomics")},
                                   "explanations": {"type": "array", "items": {"type": "object"}},
                                   "alternatives": {"type": "array", "items": ref("AlternativePlan")},
                                   "metadata": {"type": "object"}}},
-    "DatasetManifest": {"type": "object", "required": ["id", "name", "kind", "source", "checksum", "created_at"],
+    "DatasetManifest": {"type": "object", "required": ["id", "name", "kind", "source", "checksum", "created_at", "format"],
                         "properties": {"id": {"type": "string", "format": "uuid"},
                                        "name": {"type": "string"}, "kind": {"type": "string", "enum": ["observed", "derived", "assumed"]},
                                        "source": {"type": "string"}, "license": {"type": ["string", "null"]},
                                        "checksum": {"type": "string"},
+                                       "format": {"type": "string", "enum": ["geojson", "csv"]},
+                                       "role": {"type": "string", "enum": ["demand_sessions", "grid_headroom"]},
                                        "captured_at": {"type": ["string", "null"], "format": "date-time"},
                                        "created_at": {"type": "string", "format": "date-time"}}},
     "DatasetImportResult": {"type": "object", "required": ["dataset_id", "features", "sha256"],
@@ -184,6 +243,13 @@ schemas = {
         "properties": {"spec": ref("ScenarioSpec"), "data_quality": ref("DataQuality")}},
     "SavedDatasetScenario": {"type": "object", "required": ["scenario", "data_quality"],
         "properties": {"scenario": ref("SavedScenario"), "data_quality": ref("DataQuality")}},
+    "PlanningCSVImportResult": {"type": "object", "required": [
+        "scenario", "dataset_id", "role", "sha256", "reused"],
+        "properties": {"scenario": ref("SavedScenario"),
+                       "dataset_id": {"type": "string", "format": "uuid"},
+                       "role": {"type": "string", "enum": ["demand_sessions", "grid_headroom"]},
+                       "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                       "reused": {"type": "boolean"}}},
 }
 
 uuid_param = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
@@ -192,9 +258,29 @@ error_responses = {"401": response(ref("Error"), "Authentication required"),
 spec_create = {"type": "object", "required": ["name", "spec"], "properties": {
     "name": {"type": "string", "minLength": 1, "maxLength": 120}, "spec": ref("ScenarioSpec")}}
 
+
+def planning_csv_import(role: str) -> dict:
+    common = {"scenario_name": {"type": "string", "minLength": 1, "maxLength": 120},
+              "dataset_name": {"type": "string", "minLength": 1, "maxLength": 120},
+              "source": {"type": "string", "minLength": 1, "maxLength": 2048},
+              "kind": {"type": "string", "enum": ["observed", "assumed"]},
+              "time_zone": {"type": "string", "description": "IANA zone; must match scenario time_zone if set"},
+              "license": {"type": "string", "maxLength": 2048},
+              "file": {"type": "string", "format": "binary"}}
+    if role == "demand_sessions":
+        common.update({"start_date": {"type": "string", "format": "date"},
+                       "end_date": {"type": "string", "format": "date"}})
+    else:
+        common["profile_date"] = {"type": "string", "format": "date"}
+    required = ["scenario_name", "dataset_name", "source", "kind", "time_zone", "file"]
+    required += ["start_date", "end_date"] if role == "demand_sessions" else ["profile_date"]
+    return {"required": True, "content": {"multipart/form-data": {"schema": {
+        "type": "object", "additionalProperties": False,
+        "required": required, "properties": common}}}}
+
 document = {
     "openapi": "3.1.0",
-    "info": {"title": "Вектор — planning API", "version": "1.0.0",
+    "info": {"title": "EV Infrastructure Planning API", "version": "1.0.0",
              "description": "Public scenario, run and geography API. Engine coordinates and money are explicit in ScenarioSpec."},
     "servers": [{"url": "http://localhost:58080"}],
     "security": [{"bearerAuth": []}],
@@ -219,6 +305,20 @@ document = {
                           "404": response(ref("Error")), "503": response(ref("Error")), **error_responses}}},
         "/api/v1/scenarios/{id}": {"get": {"summary": "Get scenario", "parameters": [uuid_param],
             "responses": {"200": response(ref("SavedScenario")), "404": response(ref("Error")), **error_responses}}},
+        "/api/v1/scenarios/{id}/imports/sessions": {"post": {
+            "summary": "Derive an immutable scenario from uploaded charging sessions CSV",
+            "description": "Sessions are completed charging, not latent unmet demand. The original CSV bytes are stored under dataset_id. Upload does not start a calculation; use the new scenario id with /runs.",
+            "parameters": [uuid_param], "requestBody": planning_csv_import("demand_sessions"),
+            "responses": {"201": response(ref("PlanningCSVImportResult")),
+                          "404": response(ref("Error")), "413": response(ref("Error")),
+                          "503": response(ref("Error")), **error_responses}}},
+        "/api/v1/scenarios/{id}/imports/grid-headroom": {"post": {
+            "summary": "Derive an immutable scenario from uploaded hourly grid headroom CSV",
+            "description": "Requires all 24 hours for each grid node. headroom_kw is available connection reserve, not background load or AC power-flow verification.",
+            "parameters": [uuid_param], "requestBody": planning_csv_import("grid_headroom"),
+            "responses": {"201": response(ref("PlanningCSVImportResult")),
+                          "404": response(ref("Error")), "413": response(ref("Error")),
+                          "503": response(ref("Error")), **error_responses}}},
         "/api/v1/scenarios/{id}/runs": {"post": {"summary": "Queue idempotent calculation",
             "parameters": [uuid_param, {"name": "Idempotency-Key", "in": "header", "required": True,
                                        "schema": {"type": "string", "minLength": 8, "maxLength": 128}}],
@@ -248,6 +348,12 @@ document = {
                     "file": {"type": "string", "format": "binary"}}}}}},
             "responses": {"201": response(ref("DatasetImportResult")),
                           "413": response(ref("Error")), **error_responses}}},
+        "/api/v1/datasets/{id}/file": {"get": {
+            "summary": "Download exact original CSV bytes of a planning data upload",
+            "parameters": [uuid_param], "responses": {
+                "200": {"description": "Uploaded CSV", "content": {"text/csv": {
+                    "schema": {"type": "string", "format": "binary"}}}},
+                "404": response(ref("Error")), **error_responses}}},
         "/api/v1/map": {"get": {"summary": "GeoJSON in bounding box", "parameters": [
             {"name": "bbox", "in": "query", "required": True, "schema": {"type": "string"},
              "description": "west,south,east,north in WGS84"},
@@ -267,5 +373,5 @@ document = {
 }
 
 target = ROOT / "openapi.json"
-target.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+target.write_bytes((json.dumps(document, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 print(target)

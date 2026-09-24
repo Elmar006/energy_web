@@ -122,7 +122,7 @@ func (r DatasetBuildRequest) selections() []selectedDataset {
 	return []selectedDataset{
 		{role: "demand_zones", featureType: "demand_zone", id: r.DatasetVersions.DemandZones, outputKey: "zones",
 			required: []string{"name", "hourly_kwh", "mean_session_kwh", "max_travel_minutes", "time_zone"},
-			allowed:  fields("feature_type", "name", "group", "hourly_kwh", "mean_session_kwh", "max_travel_minutes", "time_zone"),
+			allowed:  fields("feature_type", "name", "group", "hourly_kwh", "mean_session_kwh", "arrival_profile", "max_travel_minutes", "time_zone"),
 			point:    true, hourly: true},
 		{role: "candidate_sites", featureType: "candidate_site", id: r.DatasetVersions.Sites, outputKey: "sites",
 			required: []string{"name", "grid_node_id", "option_ids"},
