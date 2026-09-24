@@ -452,7 +452,7 @@
       },
       "SessionArrivalProfile": {
         "additionalProperties": false,
-        "description": "Measured sessions starting in each local hour of a representative day.\n\nQuantiles are the empirical inverse CDF at probabilities 0, 0.01, ..., 1.\nThey describe *delivered* session energy, not unobserved demand.",
+        "description": "Supplied sessions starting in each local hour of a representative day.\n\nQuantiles are the empirical inverse CDF at probabilities 0, 0.01, ..., 1.\nThey describe *delivered* session energy, not unobserved demand.",
         "properties": {
           "hourly_sessions": {
             "items": {
