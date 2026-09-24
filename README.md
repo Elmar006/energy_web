@@ -66,4 +66,6 @@ docker run --rm -v E:/energy/engine:/app -w /app energy-engine python -m pytest 
 
 Подробный текущий статус: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md). Для защиты и передачи комиссии используйте [конкурсный отчёт](docs/commission/REPORT.md), включая перечень данных, которые ещё необходимо подтвердить.
 
+План следующих работ: [доведение системы и алгоритма до проверяемой готовности](docs/SYSTEM_COMPLETION_PLAN.md). В нём разделены доработка спроса и эксплуатации, инвестиционная модель, доказательство эффекта и надёжность бэкенда; у каждого этапа есть критерий завершения.
+
 Исходные геоданные кейса получены из [Geofabrik Monaco](https://download.geofabrik.de/europe/monaco.html), © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright). Лицензия исходного кода этого репозитория отдельно не объявлена.
