@@ -4,6 +4,11 @@
 <img src="frontend/public/brand-logo.png" alt="Логотип EV Infrastructure" width="80" height="80">
 
 
+# EV Infrastructure Planning System
+
+Планирование зарядной сети с проверяемыми ограничениями бюджета, дорожной доступности и мощности подключения.
+
+<img src="docs/assets/project-card.png" alt="Фирменная карточка проекта" width="900">
 
 
 <br>
@@ -20,11 +25,6 @@
 
 <br>
 
-# EV Infrastructure Planning System
-
-Планирование зарядной сети с проверяемыми ограничениями бюджета, дорожной доступности и мощности подключения.
-
-<img src="docs/assets/project-card.png" alt="Фирменная карточка проекта" width="900">
 
 </div>
 
