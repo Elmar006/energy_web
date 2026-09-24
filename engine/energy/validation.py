@@ -18,6 +18,14 @@ def describe_input_quality(spec: PlanningInput) -> dict:
     if observed:
         warnings.append("Observed charging sessions describe fulfilled charging only; latent unmet demand is unknown.")
         warnings.append("The 'observed' source label is supplied by the importer and has not been independently verified.")
+    unverified_coverage = [zone.id for zone in spec.zones if zone.arrival_profile is not None
+                           and not zone.arrival_profile.coverage_complete]
+    claimed_coverage = [zone.id for zone in spec.zones if zone.arrival_profile is not None
+                        and zone.arrival_profile.coverage_complete]
+    if unverified_coverage:
+        warnings.append("Session export day-by-day completeness is unverified for some zones; days without records are rejected unless full coverage is explicitly asserted.")
+    if claimed_coverage:
+        warnings.append("Complete day-by-day session coverage was asserted by the importer, not independently verified.")
     if any(zone.arrival_profile is not None and
            zone.arrival_profile.hourly_load_method == "uniform_session_duration"
            for zone in spec.zones):
@@ -36,6 +44,8 @@ def describe_input_quality(spec: PlanningInput) -> dict:
         "observed_session_zone_ids": observed,
         "assumed_session_zone_ids": assumed,
         "parametric_zone_ids": parametric,
+        "unverified_coverage_zone_ids": unverified_coverage,
+        "claimed_complete_coverage_zone_ids": claimed_coverage,
         "demand_scope": ("served_sessions_only" if len(observed) == len(spec.zones) else
                          "assumed_session_profiles" if len(assumed) == len(spec.zones) else
                          "mixed" if observed or assumed else "scenario_assumptions"),
@@ -66,9 +76,13 @@ def compare_operations(result: SolveResult, simulations: list[dict]) -> list[dic
             "simulated_service_fraction_min": round(min(fractions), 6),
             "simulated_service_fraction_max": round(max(fractions), 6),
             "service_gap_percentage_points": round(100 * (optimization_fraction - simulated_fraction), 3),
-            "requested_energy_kwh_mean": round(mean(run["requested_energy_kwh"] for run in runs), 3),
-            "delivered_energy_kwh_mean": round(mean(run["energy_kwh"] for run in runs), 3),
-            "unserved_energy_kwh_mean": round(mean(run["unserved_energy_kwh"] for run in runs), 3),
+            "simulation_days": runs[0].get("simulation_days", 1),
+            "requested_energy_kwh_mean": round(mean(run["requested_energy_kwh"] /
+                                                     run.get("simulation_days", 1) for run in runs), 3),
+            "delivered_energy_kwh_mean": round(mean(run["energy_kwh"] /
+                                                     run.get("simulation_days", 1) for run in runs), 3),
+            "unserved_energy_kwh_mean": round(mean(run["unserved_energy_kwh"] /
+                                                    run.get("simulation_days", 1) for run in runs), 3),
         })
     return rows
 
@@ -103,7 +117,7 @@ def compare_economics(spec: PlanningInput, result: SolveResult, simulations: lis
                             for item in result.selected if item["year"] <= year)
                 grid = sum(site["grid_kwh"] for site in run["dispatch_by_site"])
                 discharged = sum(site["battery_discharge_kwh"] for site in run["dispatch_by_site"])
-                annual = 365 * (
+                annual = 365 / run.get("simulation_days", 1) * (
                     run["energy_kwh"] * par.sale_rub_per_kwh * scenario.tariff_multiplier
                     - grid * par.purchase_rub_per_kwh
                     - discharged * par.storage_degradation_rub_per_kwh

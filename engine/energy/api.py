@@ -57,6 +57,7 @@ class DeriveRequest(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     profile_date: date | None = None
+    coverage_complete: bool = False
 
 
 @app.get("/healthz")
@@ -92,8 +93,11 @@ def derive_uploaded_data(request: DeriveRequest):
                 raise ValueError("start_date and end_date are required only for demand_sessions")
             result = derive_demand(request.input, csv_bytes, source=request.source,
                                    time_zone=request.time_zone, start_date=request.start_date,
-                                   end_date=request.end_date, license=request.license, kind=request.kind)
+                                   end_date=request.end_date, license=request.license, kind=request.kind,
+                                   coverage_complete=request.coverage_complete)
         else:
+            if request.coverage_complete:
+                raise ValueError("coverage_complete applies only to demand_sessions")
             if request.profile_date is None or request.start_date is not None or request.end_date is not None:
                 raise ValueError("profile_date is required only for grid_headroom")
             result = apply_grid_profile(request.input, csv_bytes, source=request.source,
@@ -131,9 +135,12 @@ def calculate(request: CalculationRequest):
     output = {"optimization": result.as_dict(), "simulation": [], "operational_validation": [],
               "operational_economics": [],
               "explanations": [], "alternatives": [],
-              "metadata": {"model_version": "planner-mip-v3", "input_sha256": hashlib.sha256(canonical).hexdigest(),
+              "metadata": {"model_version": "planner-mip-v3", "simulation_version": "simpy-multiday-v1",
+                           "input_sha256": hashlib.sha256(canonical).hexdigest(),
                            "python_version": sys.version.split()[0], "pyomo_version": version("pyomo"),
-                           "highspy_version": version("highspy"), "simulation_seeds": request.simulation_seeds,
+                           "highspy_version": version("highspy"), "simpy_version": version("simpy"),
+                           "numpy_version": version("numpy"), "simulation_seeds": request.simulation_seeds,
+                           "simulation_days": request.input.parameters.simulation_days,
                            "input_quality": describe_input_quality(request.input),
                            "alternative_service_fractions": request.alternative_service_fractions,
                            "alternative_solver_seconds": request.alternative_solver_seconds}}

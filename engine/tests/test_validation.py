@@ -17,6 +17,8 @@ def test_quality_report_never_equates_metered_charging_to_total_demand(small_inp
     assert report["observed_session_zone_ids"] == ["z1"]
     assert any("latent unmet demand" in warning for warning in report["warnings"])
     assert any("fewer than 7 days" in warning for warning in report["warnings"])
+    assert report["unverified_coverage_zone_ids"] == ["z1"]
+    assert report["claimed_complete_coverage_zone_ids"] == []
 
 
 def test_operational_comparison_exposes_optimistic_hourly_coverage():
@@ -55,3 +57,25 @@ def test_simulated_npv_reprices_actual_grid_and_storage_flows(small_input):
     small_input.parameters.sale_rub_per_kwh = 0
     optimization.cashflow_rub["base"] = 100
     assert compare_economics(small_input, optimization, runs)[0]["profitability_sign_changed"] is True
+
+
+def test_multiday_energy_and_economics_are_normalized_to_a_day(small_input):
+    optimization = SimpleNamespace(
+        service_by_year=[{"scenario_id": "base", "year": 2027, "demand_kwh": 10, "served_kwh": 10}],
+        selected=[{"site_id": "s1", "option_id": "dc", "year": 2027}],
+        investment_rub_by_year=[{"year": 2027, "rub": 1000}],
+        cashflow_rub={"base": 0},
+    )
+    one = {"scenario_id": "base", "year": 2027, "seed": 1,
+           "simulation_days": 1, "requested_energy_kwh": 10, "energy_kwh": 8,
+           "unserved_energy_kwh": 2,
+           "dispatch_by_site": [{"grid_kwh": 9, "battery_discharge_kwh": 0}]}
+    two = {**one, "simulation_days": 2, "requested_energy_kwh": 20,
+           "energy_kwh": 16, "unserved_energy_kwh": 4,
+           "dispatch_by_site": [{"grid_kwh": 18, "battery_discharge_kwh": 0}]}
+    single = compare_operations(optimization, [one])[0]
+    multi = compare_operations(optimization, [two])[0]
+    assert single.pop("simulation_days") == 1
+    assert multi.pop("simulation_days") == 2
+    assert single == multi
+    assert compare_economics(small_input, optimization, [one]) == compare_economics(small_input, optimization, [two])

@@ -28,6 +28,8 @@ def test_calculate_contract(small_input):
     assert body["explanations"][0]["lost_served_kwh"]["base"] == 10
     assert len(body["metadata"]["input_sha256"]) == 64
     assert body["metadata"]["model_version"] == "planner-mip-v3"
+    assert body["metadata"]["simulation_version"] == "simpy-multiday-v1"
+    assert body["metadata"]["simulation_days"] == 3
     assert body["metadata"]["input_quality"]["demand_scope"] == "scenario_assumptions"
     assert [item["target_service_fraction"] for item in body["alternatives"]] == [0, 0.5, 1]
     assert body["alternatives"][0]["optimization"]["objective"] == 0

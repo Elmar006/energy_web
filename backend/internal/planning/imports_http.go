@@ -33,12 +33,14 @@ func (d HTTPDeriver) Derive(ctx context.Context, spec json.RawMessage, in Import
 		StartDate        *string         `json:"start_date,omitempty"`
 		EndDate          *string         `json:"end_date,omitempty"`
 		ProfileDate      *string         `json:"profile_date,omitempty"`
+		CoverageComplete bool            `json:"coverage_complete"`
 	}{
 		Input: spec, DatasetVersionID: versionID, DatasetName: in.DatasetName,
 		CSVBase64: base64.StdEncoding.EncodeToString(in.CSV), Role: in.Role,
 		Source: in.Source, Kind: in.Kind, TimeZone: in.TimeZone,
 		License: optionalString(in.License), StartDate: optionalString(in.StartDate),
 		EndDate: optionalString(in.EndDate), ProfileDate: optionalString(in.ProfileDate),
+		CoverageComplete: in.CoverageComplete,
 	})
 	if err != nil {
 		return DerivedInput{}, ErrDeriverUnavailable

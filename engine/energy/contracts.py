@@ -39,6 +39,8 @@ class SessionArrivalProfile(FiniteModel):
     energy_quantiles_kwh: list[float] = Field(min_length=101, max_length=101)
     sample_count: int = Field(gt=0)
     observation_days: int = Field(gt=0)
+    days_with_sessions: int | None = Field(default=None, gt=0)
+    coverage_complete: bool = False
     source_kind: Literal["observed", "assumed"]
     hourly_load_method: Literal["uniform_session_duration", "measured_interval"]
     provenance: Provenance
@@ -53,6 +55,11 @@ class SessionArrivalProfile(FiniteModel):
             raise ValueError("session energy quantiles must be nondecreasing")
         if abs(sum(self.hourly_sessions) * self.observation_days - self.sample_count) > 1e-5:
             raise ValueError("session arrivals must conserve the observed session count")
+        if self.days_with_sessions is not None:
+            if self.days_with_sessions > min(self.observation_days, self.sample_count):
+                raise ValueError("days_with_sessions cannot exceed observation_days or sample_count")
+            if self.days_with_sessions < self.observation_days and not self.coverage_complete:
+                raise ValueError("missing session days require coverage_complete=true")
         return self
 
 
@@ -160,6 +167,7 @@ class Parameters(FiniteModel):
     storage_degradation_rub_per_kwh: float = Field(default=0, ge=0)
     minimum_zone_service: float = Field(default=0, ge=0, le=1)
     solver_seconds: int = Field(default=60, ge=1, le=3600)
+    simulation_days: int = Field(default=3, ge=1, le=14)
 
     @model_validator(mode="after")
     def check_periods(self):

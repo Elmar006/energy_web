@@ -36,6 +36,12 @@ def test_public_openapi_contract_has_resolved_component_references():
     assert schemas["PreparedDatasetScenario"]["properties"]["spec"]["$ref"].endswith("/ScenarioSpec")
     assert schemas["DatasetScenarioRequest"]["properties"]["dataset_versions"]["$ref"].endswith("/DatasetSelection")
     assert "version_id" in schemas["DatasetReference"]["properties"]
+    assert schemas["Parameters"]["properties"]["simulation_days"]["maximum"] == 14
+    assert "day_dispatch" in schemas["SimulationResult"]["required"]
+    assert "storage_energy_balance_error_kwh" in schemas["DispatchVerification"]["required"]
+    assert "coverage_complete" in schemas["SessionArrivalProfile"]["properties"]
+    upload = document["paths"]["/api/v1/scenarios/{id}/imports/sessions"]["post"]
+    assert "coverage_complete" in upload["requestBody"]["content"]["multipart/form-data"]["schema"]["properties"]
 
     def walk(value):
         if isinstance(value, dict):

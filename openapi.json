@@ -363,6 +363,13 @@
             "minimum": 1,
             "title": "Solver Seconds",
             "type": "integer"
+          },
+          "simulation_days": {
+            "default": 3,
+            "maximum": 14,
+            "minimum": 1,
+            "title": "Simulation Days",
+            "type": "integer"
           }
         },
         "required": [
@@ -504,6 +511,24 @@
             "exclusiveMinimum": 0,
             "title": "Observation Days",
             "type": "integer"
+          },
+          "days_with_sessions": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Days With Sessions"
+          },
+          "coverage_complete": {
+            "default": false,
+            "title": "Coverage Complete",
+            "type": "boolean"
           },
           "source_kind": {
             "enum": [
@@ -1482,7 +1507,8 @@
           "max_equipment_overload_kw",
           "max_storage_soc_violation_kwh",
           "max_simultaneous_storage_kw",
-          "session_dispatch_energy_mismatch_kwh"
+          "session_dispatch_energy_mismatch_kwh",
+          "storage_energy_balance_error_kwh"
         ],
         "properties": {
           "passed": {
@@ -1514,6 +1540,44 @@
           },
           "session_dispatch_energy_mismatch_kwh": {
             "type": "number",
+            "minimum": 0
+          },
+          "storage_energy_balance_error_kwh": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "DayDispatch": {
+        "type": "object",
+        "required": [
+          "day_index",
+          "arrivals",
+          "dispatch_by_site",
+          "charging_sessions_at_boundary",
+          "queued_sessions_at_boundary"
+        ],
+        "properties": {
+          "day_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "arrivals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "dispatch_by_site": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DispatchSite"
+            }
+          },
+          "charging_sessions_at_boundary": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "queued_sessions_at_boundary": {
+            "type": "integer",
             "minimum": 0
           }
         }
@@ -1704,10 +1768,13 @@
           "year",
           "scenario_id",
           "seed",
+          "simulation_days",
           "arrivals",
           "served_sessions",
           "refused_sessions",
           "arrivals_by_hour",
+          "arrivals_by_day_hour",
+          "day_dispatch",
           "requested_energy_kwh",
           "unserved_energy_kwh",
           "mean_wait_minutes",
@@ -1732,6 +1799,11 @@
           "seed": {
             "type": "integer"
           },
+          "simulation_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 14
+          },
           "arrivals": {
             "type": "integer",
             "minimum": 0
@@ -1751,6 +1823,28 @@
             "items": {
               "type": "integer",
               "minimum": 0
+            }
+          },
+          "arrivals_by_day_hour": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 14,
+            "items": {
+              "type": "array",
+              "minItems": 24,
+              "maxItems": 24,
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "day_dispatch": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 14,
+            "items": {
+              "$ref": "#/components/schemas/DayDispatch"
             }
           },
           "requested_energy_kwh": {
@@ -1789,7 +1883,7 @@
               "null"
             ],
             "minimum": 0,
-            "maximum": 1440
+            "maximum": 20160
           },
           "served_by_zone": {
             "type": "object",
@@ -1840,6 +1934,7 @@
           "simulated_service_fraction_min",
           "simulated_service_fraction_max",
           "service_gap_percentage_points",
+          "simulation_days",
           "requested_energy_kwh_mean",
           "delivered_energy_kwh_mean",
           "unserved_energy_kwh_mean"
@@ -1854,6 +1949,11 @@
           "seeds": {
             "type": "integer",
             "minimum": 1
+          },
+          "simulation_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 14
           },
           "optimized_service_fraction": {
             "type": "number",
@@ -2760,6 +2860,11 @@
                   "end_date": {
                     "type": "string",
                     "format": "date"
+                  },
+                  "coverage_complete": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Importer asserts every zone and calendar day is covered, including zero-session days. Required to accept days with no records."
                   }
                 }
               }

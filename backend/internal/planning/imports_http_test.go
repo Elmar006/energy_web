@@ -16,6 +16,7 @@ import (
 
 func TestHTTPDeriverTransmitsExactCSVAndClassifiesFailures(t *testing.T) {
 	in := validSessionImport()
+	in.CoverageComplete = true
 	versionID := "01234567-89ab-4cde-8fab-0123456789ab"
 	var status atomic.Int32
 	status.Store(200)
@@ -30,10 +31,11 @@ func TestHTTPDeriverTransmitsExactCSVAndClassifiesFailures(t *testing.T) {
 			DatasetVersionID string          `json:"dataset_version_id"`
 			StartDate        string          `json:"start_date"`
 			EndDate          string          `json:"end_date"`
+			CoverageComplete bool            `json:"coverage_complete"`
 		}
 		if json.NewDecoder(r.Body).Decode(&body) != nil ||
 			body.DatasetVersionID != versionID || body.StartDate != in.StartDate ||
-			body.EndDate != in.EndDate || string(body.Input) != `{"id":"base"}` {
+			body.EndDate != in.EndDate || !body.CoverageComplete || string(body.Input) != `{"id":"base"}` {
 			t.Errorf("wrong derivation request: %+v", body)
 		}
 		decoded, err := base64.StdEncoding.DecodeString(body.CSVBase64)
