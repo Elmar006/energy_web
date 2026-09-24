@@ -2,6 +2,21 @@
 
 <img src="frontend/public/brand-logo.png" alt="Логотип EV Infrastructure" width="80" height="80">
 
+
+<br>
+
+  ![Go](https://img.shields.io/badge/Go-Backend-00ADD8?logo=go&logoColor=white)
+  ![Python](https://img.shields.io/badge/Python-Optimization-3776AB?logo=python&logoColor=white)
+  ![PostgreSQL](https://img.shields.io/badge/PostgreSQL%20%2B%20PostGIS-Data-4169E1?logo=postgresql&logoColor=white)
+  ![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white)
+  ![Pyomo](https://img.shields.io/badge/Pyomo-MILP-5B2C6F)
+  ![HiGHS](https://img.shields.io/badge/HiGHS-Solver-1F6FEB)
+  ![SimPy](https://img.shields.io/badge/SimPy-Simulation-4B8BBE)
+  ![OSRM](https://img.shields.io/badge/OSRM-Routing-222222)
+  ![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539?logo=openapiinitiative&logoColor=white)
+
+<br>
+
 # EV Infrastructure Planning System
 
 Планирование зарядной сети с проверяемыми ограничениями бюджета, дорожной доступности и мощности подключения.
@@ -65,5 +80,7 @@ docker run --rm -v E:/energy/engine:/app -w /app energy-engine python -m pytest 
 - Демо-вход защищён одним паролем, API — одним bearer-токеном. Многопользовательские проекты/RBAC и production-аутентификация пока отсутствуют.
 
 Подробный текущий статус: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md). Для защиты и передачи комиссии используйте [конкурсный отчёт](docs/commission/REPORT.md), включая перечень данных, которые ещё необходимо подтвердить.
+
+План следующих работ: [доведение системы и алгоритма до проверяемой готовности](docs/SYSTEM_COMPLETION_PLAN.md). В нём разделены доработка спроса и эксплуатации, инвестиционная модель, доказательство эффекта и надёжность бэкенда; у каждого этапа есть критерий завершения.
 
 Исходные геоданные кейса получены из [Geofabrik Monaco](https://download.geofabrik.de/europe/monaco.html), © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright). Лицензия исходного кода этого репозитория отдельно не объявлена.
