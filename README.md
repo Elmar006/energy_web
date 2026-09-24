@@ -2,6 +2,7 @@
 
 <img src="frontend/public/brand-logo.png" alt="Логотип EV Infrastructure" width="80" height="80">
 
+
 <br>
 
   ![Go](https://img.shields.io/badge/Go-Backend-00ADD8?logo=go&logoColor=white)
