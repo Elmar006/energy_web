@@ -13,6 +13,7 @@ from time import monotonic
 import pyomo.environ as pyo
 
 from .contracts import PlanningInput
+from .dated import DatedHorizon
 
 MAX_ENERGY_AUDIT_ROWS = 2000
 
@@ -35,6 +36,10 @@ class SolveResult:
     service_by_year: list[dict] = field(default_factory=list)
     energy_audit: list[dict] = field(default_factory=list)
     verification: dict[str, float | bool] = field(default_factory=dict)
+    demand_basis: str = "representative_day"
+    calendar_covered_days: int | None = None
+    annualization_factor: float | None = None
+    annualization_basis: str | None = None
 
     def as_dict(self) -> dict:
         return self.__dict__
@@ -53,7 +58,12 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
     scenarios = {x.id: x for x in d.scenarios}
     np = len(par.years)
     periods = range(np)
-    hours = range(24)
+    horizon = DatedHorizon.from_calendar(d.service_calendar) if d.service_calendar else None
+    hours = range(len(horizon.slot_starts_utc)) if horizon else range(24)
+    local_hour = lambda h: horizon.local_hours[h] if horizon else h
+    annualization_factor = d.service_calendar.annualization_factor if horizon else 365
+    request_zones = set(d.service_calendar.request_zone_ids) if horizon else set()
+    request_rows = list(enumerate(d.charging_requests)) if horizon else []
     edge_minutes = {(x.zone_id, x.site_id): x.minutes for x in d.travel_edges}
     edges = [(z, s) for (z, s), mins in edge_minutes.items() if mins <= zones[z].max_travel_minutes]
     edge_by_zone = defaultdict(list)
@@ -61,9 +71,41 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
     for z, s in edges:
         edge_by_zone[z].append((z, s))
         edge_by_site[s].append((z, s))
+    request_by_zone = defaultdict(list)
+    request_slots = {}
+    request_site_slots = defaultdict(list)
+    for r, request in request_rows:
+        request_by_zone[request.zone_id].append(r)
+        for _, site_id in edge_by_zone[request.zone_id]:
+            travel = edge_minutes[request.zone_id, site_id]
+            available = [(r, site_id, h) for h in hours
+                         if horizon.overlap_hours(request, h, travel) > 1e-9]
+            if available:
+                request_site_slots[r, site_id] = available
+                for key in available:
+                    request_slots[key] = horizon.overlap_hours(request, key[2], travel)
+
+    def zone_demand(z, h):
+        return 0.0 if z in request_zones else zones[z].hourly_kwh[local_hour(h)]
+
+    def zone_total(z):
+        if z in request_zones:
+            return sum(d.charging_requests[r].energy_from_charger_kwh *
+                       d.charging_requests[r].population_weight
+                       for r in request_by_zone[z])
+        return sum(zones[z].hourly_kwh[local_hour(h)] for h in hours)
+
+    def hourly_upper_bound(z, h):
+        if z in request_zones:
+            return sum(min(d.charging_requests[r].energy_from_charger_kwh,
+                           d.charging_requests[r].max_vehicle_kw *
+                           horizon.overlap_hours(d.charging_requests[r], h)) *
+                       d.charging_requests[r].population_weight
+                       for r in request_by_zone[z])
+        return zone_demand(z, h)
     if par.minimum_zone_service:
         for zone in d.zones:
-            if not edge_by_zone[zone.id] and any(sum(zone.hourly_kwh) * scenario.demand_multiplier[p] > 0
+            if not edge_by_zone[zone.id] and any(zone_total(zone.id) * scenario.demand_multiplier[p] > 0
                                                  for scenario in d.scenarios for p in periods):
                 return SolveResult("infeasible", None, None, [], [], [], [], {}, {}, {},
                                    f"Зона {zone.id} недостижима при минимальном требовании обслуживания")
@@ -78,11 +120,18 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
     m.B = pyo.Var(sites.keys(), periods, within=pyo.NonNegativeReals)
     m.G = pyo.Var(sites.keys(), periods, within=pyo.NonNegativeReals)
     m.X = pyo.Var(edges, periods, scenarios.keys(), hours, within=pyo.NonNegativeReals)
+    if horizon:
+        m.R = pyo.Var([(r, s, p, q, h) for r, s, h in request_slots
+                       for p in periods for q in scenarios],
+                      within=pyo.NonNegativeReals)
+        m.RequestSite = pyo.Var(list(request_site_slots), periods, scenarios.keys(),
+                                within=pyo.Binary)
     m.Draw = pyo.Var(sites.keys(), periods, scenarios.keys(), hours, within=pyo.NonNegativeReals)
     m.PVUsed = pyo.Var(sites.keys(), periods, scenarios.keys(), hours, within=pyo.NonNegativeReals)
     m.Charge = pyo.Var(sites.keys(), periods, scenarios.keys(), hours, within=pyo.NonNegativeReals)
     m.Discharge = pyo.Var(sites.keys(), periods, scenarios.keys(), hours, within=pyo.NonNegativeReals)
-    m.SOC = pyo.Var(sites.keys(), periods, scenarios.keys(), range(25), within=pyo.NonNegativeReals)
+    m.SOC = pyo.Var(sites.keys(), periods, scenarios.keys(), range(len(hours) + 1),
+                    within=pyo.NonNegativeReals)
     m.BMode = pyo.Var(sites.keys(), periods, scenarios.keys(), hours, within=pyo.Binary)
     m.C = pyo.ConstraintList()
 
@@ -129,12 +178,42 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
         m.C.add(invest(p) <= par.annual_budgets_rub[p])
     m.C.add(sum(invest(p) for p in periods) <= par.total_budget_rub)
 
+    if horizon:
+        for q, scenario in scenarios.items():
+            for p in periods:
+                for r, request in request_rows:
+                    feasible_sites = [site_id for (request_id, site_id) in request_site_slots
+                                      if request_id == r]
+                    if feasible_sites:
+                        m.C.add(sum(m.RequestSite[r, s, p, q] for s in feasible_sites) <= 1)
+                        m.C.add(sum(m.R[r, s, p, q, h]
+                                    for s in feasible_sites for _, _, h in request_site_slots[r, s])
+                                <= request.energy_from_charger_kwh * request.population_weight *
+                                scenario.demand_multiplier[p])
+                    for s in feasible_sites:
+                        for _, _, h in request_site_slots[r, s]:
+                            m.C.add(m.R[r, s, p, q, h] <= request.max_vehicle_kw *
+                                    request.population_weight * scenario.demand_multiplier[p] *
+                                    request_slots[r, s, h] * m.RequestSite[r, s, p, q])
+                            m.C.add(m.R[r, s, p, q, h] <=
+                                    sum(active(s, o, p) * opts[o].charger_kw
+                                        for o in sites[s].option_ids) *
+                                    request.population_weight * scenario.demand_multiplier[p] *
+                                    request_slots[r, s, h])
+                for z in request_zones:
+                    for z0, s in edge_by_zone[z]:
+                        for h in hours:
+                            m.C.add(m.X[z0, s, p, q, h] ==
+                                    sum(m.R[r, s, p, q, h]
+                                        for r in request_by_zone[z]
+                                        if (r, s, h) in request_slots))
+
     for q, scenario in scenarios.items():
         for p in periods:
             for h in hours:
                 for z, zone in zones.items():
-                    demand = zone.hourly_kwh[h] * scenario.demand_multiplier[p]
-                    if edge_by_zone[z]:
+                    demand = zone_demand(z, h) * scenario.demand_multiplier[p]
+                    if edge_by_zone[z] and z not in request_zones:
                         m.C.add(sum(m.X[z0, s, p, q, h] for z0, s in edge_by_zone[z]) <= demand)
                 for site in d.sites:
                     s = site.id
@@ -148,34 +227,39 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
                     m.C.add(m.Charge[s, p, q, h] <= site.battery_max_kwh / par.storage_max_hours * m.BMode[s, p, q, h])
                     m.C.add(m.Discharge[s, p, q, h] <= site.battery_max_kwh / par.storage_max_hours * (1 - m.BMode[s, p, q, h]))
                     m.C.add(m.SOC[s, p, q, h + 1] == m.SOC[s, p, q, h] + par.storage_efficiency * m.Charge[s, p, q, h] - m.Discharge[s, p, q, h] / par.storage_efficiency)
-                    m.C.add(m.PVUsed[s, p, q, h] <= solar(s, p) * par.pv_hourly_factor[h] * scenario.pv_multiplier)
+                    m.C.add(m.PVUsed[s, p, q, h] <= solar(s, p) * par.pv_hourly_factor[local_hour(h)] * scenario.pv_multiplier)
                     m.C.add(m.Draw[s, p, q, h] + m.Discharge[s, p, q, h] + m.PVUsed[s, p, q, h] == station_load(s, p, q, h) + m.Charge[s, p, q, h])
                 for n, node in nodes.items():
-                    m.C.add(sum(m.Draw[s, p, q, h] for s in node_sites[n]) <= node.headroom_kw[h] + upgraded(n, p) * node.upgrade_kw)
+                    m.C.add(sum(m.Draw[s, p, q, h] for s in node_sites[n]) <= node.headroom_kw[local_hour(h)] + upgraded(n, p) * node.upgrade_kw)
                 for z, s in edges:
                     compatible = sum(active(s, o, p) for o in sites[s].option_ids if zones[z].group in opts[o].allowed_groups)
-                    m.C.add(m.X[z, s, p, q, h] <= zones[z].hourly_kwh[h] * scenario.demand_multiplier[p] * compatible)
+                    m.C.add(m.X[z, s, p, q, h] <= hourly_upper_bound(z, h) *
+                            scenario.demand_multiplier[p] * compatible)
             for s in sites:
-                m.C.add(m.SOC[s, p, q, 24] == m.SOC[s, p, q, 0])
-                m.C.add(m.SOC[s, p, q, 24] <= battery(s, p))
+                if horizon:
+                    m.SOC[s, p, q, 0].fix(0)
+                    m.SOC[s, p, q, len(hours)].fix(0)
+                else:
+                    m.C.add(m.SOC[s, p, q, len(hours)] == m.SOC[s, p, q, 0])
+                m.C.add(m.SOC[s, p, q, len(hours)] <= battery(s, p))
             if par.minimum_zone_service:
                 for z, zone in zones.items():
                     if edge_by_zone[z]:
-                        m.C.add(sum(m.X[z0, s, p, q, h] for z0, s in edge_by_zone[z] for h in hours) >= par.minimum_zone_service * sum(zone.hourly_kwh) * scenario.demand_multiplier[p])
+                        m.C.add(sum(m.X[z0, s, p, q, h] for z0, s in edge_by_zone[z] for h in hours) >= par.minimum_zone_service * zone_total(z) * scenario.demand_multiplier[p])
 
     served = lambda q: sum(m.X[z, s, p, q, h] for z, s in edges for p in periods for h in hours)
     served_year = lambda q, p: sum(m.X[z, s, p, q, h] for z, s in edges for h in hours)
-    total_demand = {q: sum(sum(z.hourly_kwh) * scenarios[q].demand_multiplier[p]
-                           for z in zones.values() for p in periods) for q in scenarios}
+    total_demand = {q: sum(zone_total(z) * scenarios[q].demand_multiplier[p]
+                           for z in zones for p in periods) for q in scenarios}
     if minimum_service_fraction is not None:
         reachable_zones = set(edge_by_zone) if edges else set()
         for q in scenarios:
             for p in periods:
-                demand_year = sum(z.hourly_kwh[h] * scenarios[q].demand_multiplier[p]
-                                  for z in zones.values() for h in hours)
+                demand_year = sum(zone_total(z) * scenarios[q].demand_multiplier[p]
+                                  for z in zones)
                 if demand_year <= 0 or minimum_service_fraction <= 0:
                     continue
-                reachable_demand = sum(sum(zones[z].hourly_kwh) * scenarios[q].demand_multiplier[p]
+                reachable_demand = sum(zone_total(z) * scenarios[q].demand_multiplier[p]
                                        for z in reachable_zones)
                 if reachable_demand + 1e-8 < minimum_service_fraction * demand_year:
                     return SolveResult("infeasible", None, None, [], [], [], [], {}, {}, {},
@@ -185,9 +269,10 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
     for q, scenario in scenarios.items():
         annual = []
         for p in periods:
-            revenue = sum(m.X[z, s, p, q, h] for z, s in edges for h in hours) * 365 * par.sale_rub_per_kwh * scenario.tariff_multiplier
-            purchase = sum(m.Draw[s, p, q, h] for s in sites for h in hours) * 365 * par.purchase_rub_per_kwh
-            degrade = sum(m.Discharge[s, p, q, h] for s in sites for h in hours) * 365 * par.storage_degradation_rub_per_kwh
+            annualizer = annualization_factor
+            revenue = sum(m.X[z, s, p, q, h] for z, s in edges for h in hours) * annualizer * par.sale_rub_per_kwh * scenario.tariff_multiplier
+            purchase = sum(m.Draw[s, p, q, h] for s in sites for h in hours) * annualizer * par.purchase_rub_per_kwh
+            degrade = sum(m.Discharge[s, p, q, h] for s in sites for h in hours) * annualizer * par.storage_degradation_rub_per_kwh
             fixed = sum(active(s, o, p) * opts[o].annual_fixed_rub for s, o in site_options)
             annual.append((revenue - purchase - degrade - fixed - invest(p)) / ((1 + par.discount_rate) ** p))
         cash[q] = sum(annual)
@@ -309,8 +394,8 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
     service_by_year = []
     for q, scenario in scenarios.items():
         for p in periods:
-            demand_year = sum(sum(zone.hourly_kwh) * scenario.demand_multiplier[p]
-                              for zone in zones.values())
+            demand_year = sum(zone_total(z) * scenario.demand_multiplier[p]
+                              for z in zones)
             served_value = pyo.value(served_year(q, p))
             service_by_year.append({"scenario_id": q, "year": par.years[p],
                                     "demand_kwh": demand_year,
@@ -344,8 +429,8 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
         + [max(0, sum(investment_raw) - par.total_budget_rub)]
     )
     max_service_floor_shortfall = (max((minimum_service_fraction *
-                                        sum(z.hourly_kwh[h] * scenarios[q].demand_multiplier[p]
-                                            for z in zones.values() for h in hours)
+                                         sum(zone_total(z) * scenarios[q].demand_multiplier[p]
+                                             for z in zones)
                                         - pyo.value(served_year(q, p))
                                         for q in scenarios for p in periods), default=0)
                                    if minimum_service_fraction is not None else 0)
@@ -363,6 +448,9 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
     max_storage_power_overload = 0.0
     max_simultaneous_storage = 0.0
     max_demand_oversupply = 0.0
+    max_request_oversupply = 0.0
+    max_request_window_power_overload = 0.0
+    max_request_multi_site = 0.0
     for q, scenario in scenarios.items():
         for p in periods:
             for site in d.sites:
@@ -388,7 +476,7 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
                     discharge = pyo.value(m.Discharge[s, p, q, h])
                     soc_now = pyo.value(m.SOC[s, p, q, h])
                     soc_next = pyo.value(m.SOC[s, p, q, h + 1])
-                    pv_available = pv_capacity * par.pv_hourly_factor[h] * scenario.pv_multiplier
+                    pv_available = pv_capacity * par.pv_hourly_factor[local_hour(h)] * scenario.pv_multiplier
                     lhs, rhs = draw + pv_used + discharge, load + charge
                     error = abs(lhs - rhs)
                     max_balance_error = max(max_balance_error, error)
@@ -414,28 +502,49 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
                     peak_station = max(peak_station, load)
                 energy_audit_rows_total += 1
                 max_soc_bound_violation = max(max_soc_bound_violation,
-                                              -pyo.value(m.SOC[s, p, q, 24]),
-                                              pyo.value(m.SOC[s, p, q, 24]) - battery_capacity)
+                                               -pyo.value(m.SOC[s, p, q, len(hours)]),
+                                               pyo.value(m.SOC[s, p, q, len(hours)]) - battery_capacity)
                 max_soc_cycle_error = max(max_soc_cycle_error,
-                                          abs(pyo.value(m.SOC[s, p, q, 24])
-                                              - pyo.value(m.SOC[s, p, q, 0])))
+                                           abs(pyo.value(m.SOC[s, p, q, len(hours)])
+                                               - pyo.value(m.SOC[s, p, q, 0])))
                 if len(energy_audit) < MAX_ENERGY_AUDIT_ROWS:
                     energy_audit.append({"scenario_id": q, "year": par.years[p], "site_id": s,
                                          **{key: round(value, 4) for key, value in totals.items()},
                                          "peak_grid_kw": round(peak_grid, 4),
                                          "peak_station_kw": round(peak_station, 4),
                                          "battery_soc_start_kwh": round(pyo.value(m.SOC[s, p, q, 0]), 4),
-                                         "battery_soc_end_kwh": round(pyo.value(m.SOC[s, p, q, 24]), 4)})
+                                         "battery_soc_end_kwh": round(pyo.value(m.SOC[s, p, q, len(hours)]), 4)})
             for node in d.grid_nodes:
                 for h in hours:
                     used = sum(pyo.value(m.Draw[s, p, q, h]) for s in node_sites[node.id])
-                    available = node.headroom_kw[h] + pyo.value(upgraded(node.id, p)) * node.upgrade_kw
+                    available = node.headroom_kw[local_hour(h)] + pyo.value(upgraded(node.id, p)) * node.upgrade_kw
                     max_node_overload = max(max_node_overload, used - available)
             for zone in d.zones:
                 for h in hours:
                     assigned = sum(pyo.value(m.X[z, s, p, q, h]) for z, s in edge_by_zone[zone.id])
-                    demand = zone.hourly_kwh[h] * scenario.demand_multiplier[p]
+                    demand = hourly_upper_bound(zone.id, h) * scenario.demand_multiplier[p]
                     max_demand_oversupply = max(max_demand_oversupply, assigned - demand)
+            if horizon:
+                for r, request in request_rows:
+                    possible = [s for (request_id, s) in request_site_slots if request_id == r]
+                    assigned_sites = sum(pyo.value(m.RequestSite[r, s, p, q]) for s in possible)
+                    max_request_multi_site = max(max_request_multi_site, assigned_sites - 1)
+                    delivered = sum(pyo.value(m.R[r, s, p, q, h])
+                                    for s in possible for _, _, h in request_site_slots[r, s])
+                    max_request_oversupply = max(
+                        max_request_oversupply,
+                        delivered - request.energy_from_charger_kwh * request.population_weight *
+                        scenario.demand_multiplier[p])
+                    for s in possible:
+                        charger_power = pyo.value(sum(active(s, o, p) * opts[o].charger_kw
+                                                       for o in sites[s].option_ids))
+                        for _, _, h in request_site_slots[r, s]:
+                            available_kwh = (min(request.max_vehicle_kw, charger_power) *
+                                             request.population_weight * scenario.demand_multiplier[p] *
+                                             request_slots[r, s, h])
+                            max_request_window_power_overload = max(
+                                max_request_window_power_overload,
+                                pyo.value(m.R[r, s, p, q, h]) - available_kwh)
     verification = {
         "max_hourly_energy_balance_error_kwh": round(max_balance_error, 8),
         "max_relative_energy_balance_error": round(max_relative_balance_error, 10),
@@ -449,6 +558,9 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
         "max_storage_power_overload_kw": round(max(0, max_storage_power_overload), 8),
         "max_simultaneous_storage_kw": round(max(0, max_simultaneous_storage), 8),
         "max_demand_oversupply_kwh": round(max(0, max_demand_oversupply), 8),
+        "max_request_oversupply_kwh": round(max(0, max_request_oversupply), 8),
+        "max_request_window_power_overload_kwh": round(max(0, max_request_window_power_overload), 8),
+        "max_request_multi_site": round(max(0, max_request_multi_site), 8),
         "max_budget_overrun_rub": round(max_budget_overrun, 8),
         "max_service_floor_shortfall_kwh": round(max(0, max_service_floor_shortfall), 8),
         "energy_audit_rows_total": energy_audit_rows_total,
@@ -464,7 +576,10 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
                               and max_soc_cycle_error <= 1e-6
                               and max_storage_power_overload <= 1e-6
                               and max_simultaneous_storage <= 1e-6
-                              and max_demand_oversupply <= 1e-6
+                               and max_demand_oversupply <= 1e-6
+                               and max_request_oversupply <= 1e-6
+                               and max_request_window_power_overload <= 1e-6
+                               and max_request_multi_site <= 1e-6
                               and max_service_floor_shortfall <= 1e-6
                               and max_budget_overrun <= 1e-4)
     if not verification["passed"]:
@@ -472,7 +587,11 @@ def solve(spec: PlanningInput, *, minimum_service_fraction: float | None = None)
                            "solver returned a plan violating physical or budget checks",
                            verification=verification)
     return SolveResult("optimal" if term == "optimal" else "feasible", round(primary_objective, 4), gap,
-                       selected, upgrades, batteries, pv, served_out, unmet, cash_out,
-                       risk_metrics=risk_metrics, investment_rub_by_year=investment_by_year,
-                       service_by_year=service_by_year, energy_audit=energy_audit,
-                       verification=verification)
+                        selected, upgrades, batteries, pv, served_out, unmet, cash_out,
+                        risk_metrics=risk_metrics, investment_rub_by_year=investment_by_year,
+                        service_by_year=service_by_year, energy_audit=energy_audit,
+                        verification=verification,
+                        demand_basis="dated_requests" if horizon else "representative_day",
+                        calendar_covered_days=len(d.service_calendar.covered_dates) if horizon else None,
+                        annualization_factor=annualization_factor,
+                        annualization_basis=d.service_calendar.annualization_basis if horizon else "representative_day_repeat")

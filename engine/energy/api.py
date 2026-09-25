@@ -17,12 +17,13 @@ from .ingest_grid import TRANSFORM_VERSION as GRID_TRANSFORM_VERSION, apply_grid
 from .ingest_sessions import TRANSFORM_VERSION as SESSION_TRANSFORM_VERSION, derive_demand
 from .analysis import explain_selected_sites
 from .acceptance import assess_service
+from .improvement import improve_plan
 from .alternatives import calculate_alternatives
 from .corridor import CorridorInput, check_corridor
 from .fleet import FleetInput, schedule_fleet
 from .mobility import MobilityInput, compile_mobility
 from .optimizer import solve
-from .run_spec import RunSpec, engine_source_manifest, input_sha256
+from .run_spec import RunSpec, RunSpecV2, engine_source_manifest, input_sha256
 from .simulation import simulate
 from .validation import compare_economics, compare_operations, describe_input_quality
 
@@ -33,7 +34,7 @@ class CalculationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     input: PlanningInput
-    run_spec: RunSpec | None = None
+    run_spec: RunSpec | RunSpecV2 | None = None
     simulation_seeds: list[int] = Field(default_factory=lambda: [1, 2, 3], max_length=30)
     explain_top_n: int = Field(default=0, ge=0, le=10)
     alternative_service_fractions: list[float] = Field(default_factory=lambda: [0.0, 0.5, 1.0], max_length=5)
@@ -172,6 +173,18 @@ def calculate(request: CalculationRequest, request_sha256: str = Depends(_calcul
     settings = request.run_spec if request.run_spec is not None else request
     spec = request.run_spec.apply(request.input) if request.run_spec is not None else request.input
     result = solve(spec)
+    improvement_history = None
+    if isinstance(request.run_spec, RunSpecV2):
+        improvement_history = []
+        if request.run_spec.max_improvement_iterations:
+            try:
+                result, improvement_history = improve_plan(
+                    spec, result, seeds=request.run_spec.development_seeds,
+                    requirements=request.run_spec.service_requirements,
+                    max_iterations=request.run_spec.max_improvement_iterations,
+                    solve_fn=solve, simulate_fn=simulate)
+            except ValueError as error:
+                raise HTTPException(status_code=500, detail=str(error)) from error
     source_digest, source_files = engine_source_manifest()
     output = {"optimization": result.as_dict(), "simulation": [], "operational_validation": [],
               "operational_economics": [],
@@ -195,6 +208,13 @@ def calculate(request: CalculationRequest, request_sha256: str = Depends(_calcul
                            "input_quality": describe_input_quality(spec),
                            "alternative_service_fractions": settings.alternative_service_fractions,
                            "alternative_solver_seconds": settings.alternative_solver_seconds}}
+    if improvement_history is not None:
+        output["improvement"] = {
+            "method": "bounded_extra_site_development_search_v1",
+            "development_seeds": request.run_spec.development_seeds,
+            "holdout_seeds_used_for_selection": False,
+            "iterations": improvement_history,
+        }
     if result.status not in ("optimal", "feasible"):
         output["service_acceptance"] = assess_service(
             spec, result.as_dict(), [],
@@ -233,10 +253,17 @@ def calculate(request: CalculationRequest, request_sha256: str = Depends(_calcul
     return output
 
 
-def _run_spec_metadata(spec: RunSpec | None) -> dict | None:
+def _run_spec_metadata(spec: RunSpec | RunSpecV2 | None) -> dict | None:
     if spec is None:
         return None
     data = spec.model_dump(mode="json", exclude_none=True)
+    if isinstance(spec, RunSpecV2):
+        # Go uses omitempty for these additive fields; the engine must echo
+        # the exact immutable execution snapshot for worker fencing.
+        if not spec.development_seeds:
+            data.pop("development_seeds", None)
+        if not spec.max_improvement_iterations:
+            data.pop("max_improvement_iterations", None)
     if spec.service_requirements is not None:
         # Preserve the exact optional object accepted by the Go RunSpec so the
         # worker can compare the persisted execution snapshot to this echo.

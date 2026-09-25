@@ -14,11 +14,15 @@ import (
 // RunSpec is the fully resolved, immutable configuration of one execution.
 // Scenario values remain unchanged when per-run solver/day overrides are used.
 type RunSpec struct {
-	SchemaVersion               string          `json:"schema_version"`
-	ModelVersion                string          `json:"model_version"`
-	SimulationVersion           string          `json:"simulation_version"`
-	Mode                        string          `json:"mode"`
-	SimulationSeeds             []int           `json:"simulation_seeds"`
+	SchemaVersion     string `json:"schema_version"`
+	ModelVersion      string `json:"model_version"`
+	SimulationVersion string `json:"simulation_version"`
+	Mode              string `json:"mode"`
+	SimulationSeeds   []int  `json:"simulation_seeds"`
+	// DevelopmentSeeds are used only while selecting a plan. In v2 they must
+	// never overlap the final, held-out SimulationSeeds.
+	DevelopmentSeeds            []int           `json:"development_seeds,omitempty"`
+	MaxImprovementIterations    int             `json:"max_improvement_iterations,omitempty"`
 	ExplainTopN                 int             `json:"explain_top_n"`
 	AlternativeServiceFractions []float64       `json:"alternative_service_fractions"`
 	AlternativeSolverSeconds    int             `json:"alternative_solver_seconds"`
@@ -75,6 +79,7 @@ func ResolveRunSpec(raw, scenario json.RawMessage) (RunSpec, error) {
 		allowed := map[string]bool{
 			"schema_version": true, "model_version": true, "simulation_version": true,
 			"mode": true, "simulation_seeds": true, "explain_top_n": true,
+			"development_seeds": true, "max_improvement_iterations": true,
 			"alternative_service_fractions": true, "alternative_solver_seconds": true,
 			"solver_seconds": true, "simulation_days": true,
 			"service_requirements": true,
@@ -105,6 +110,10 @@ func ResolveRunSpec(raw, scenario json.RawMessage) (RunSpec, error) {
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&spec); err != nil {
 			return RunSpec{}, invalidRunSpec(err.Error())
+		}
+		if spec.SchemaVersion == "run-spec-v1" &&
+			(seen["development_seeds"] || seen["max_improvement_iterations"]) {
+			return RunSpec{}, invalidRunSpec("development seeds and improvement iterations require run-spec-v2")
 		}
 	}
 	return spec, spec.Validate()
@@ -165,7 +174,8 @@ func containsNull(value any) bool {
 // Validation mode requires enough seeds to start a comparison; it does not
 // certify statistical precision or acceptance of the resulting plan.
 func (s RunSpec) Validate() error {
-	if s.SchemaVersion != "run-spec-v1" || s.ModelVersion != "planner-mip-v3" || s.SimulationVersion != "simpy-multiday-v1" {
+	if (s.SchemaVersion != "run-spec-v1" && s.SchemaVersion != "run-spec-v2") ||
+		s.ModelVersion != "planner-mip-v3" || s.SimulationVersion != "simpy-multiday-v1" {
 		return invalidRunSpec("unsupported schema, model or simulation version")
 	}
 	if s.Mode != "exploratory" && s.Mode != "validation" {
@@ -180,6 +190,24 @@ func (s RunSpec) Validate() error {
 			return invalidRunSpec("seeds must be unique integers in [0,2147483647]")
 		}
 		seen[seed] = true
+	}
+	if s.SchemaVersion == "run-spec-v2" {
+		if len(s.DevelopmentSeeds) > 30 ||
+			s.MaxImprovementIterations < 0 || s.MaxImprovementIterations > 3 {
+			return invalidRunSpec("run-spec-v2 permits at most 30 development_seeds and 3 improvement iterations")
+		}
+		if s.MaxImprovementIterations > 0 &&
+			(s.Mode != "validation" || len(s.ServiceRequirements) == 0 || len(s.DevelopmentSeeds) < 2) {
+			return invalidRunSpec("improvement requires validation mode, service requirements and at least 2 development seeds")
+		}
+		for _, seed := range s.DevelopmentSeeds {
+			if seed < 0 || int64(seed) > 2147483647 || seen[seed] {
+				return invalidRunSpec("development seeds must be unique and disjoint from simulation seeds")
+			}
+			seen[seed] = true
+		}
+	} else if len(s.DevelopmentSeeds) != 0 || s.MaxImprovementIterations != 0 {
+		return invalidRunSpec("development seeds and improvement iterations require run-spec-v2")
 	}
 	if s.ExplainTopN < 0 || s.ExplainTopN > 10 || s.SolverSeconds < 1 || s.SolverSeconds > 3600 || s.SimulationDays < 1 || s.SimulationDays > 14 || s.AlternativeSolverSeconds < 1 || s.AlternativeSolverSeconds > 60 {
 		return invalidRunSpec("solver, simulation or explanation limit out of range")

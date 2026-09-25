@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from energy.api import app
 from energy.mobility import MobilityInput, compile_mobility
 from energy.contracts import PlanningInput
+from energy.optimizer import solve
 from energy.validation import describe_input_quality
 
 
@@ -73,6 +74,23 @@ def test_potential_demand_does_not_require_an_existing_station(mobility_spec):
     assert quality["mobility_derived_zone_ids"] == ["z1"]
     assert quality["mobility_sources"][0]["source_kind"] == "assumed"
     assert mobility_spec.model_dump(mode="json") == original
+
+
+def test_dated_request_is_part_of_saved_spec_and_solver_uses_its_full_window(mobility_spec):
+    compiled = compile_mobility(mobility_spec, MobilityInput.model_validate(_trace()))
+    spec = PlanningInput.model_validate(compiled["spec"])
+    assert spec.charging_requests[0].request_id == "vehicle-1:0"
+    assert spec.service_calendar.covered_dates[1].isoformat() == "2027-05-04"
+    assert spec.service_calendar.days[0].day_type == "weekday"
+    assert spec.service_calendar.annualization_basis == "assumed_repeat"
+    result = solve(spec)
+    expected = compiled["requests"][0]["energy_from_charger_kwh"] * 2
+    assert result.status == "optimal", result.diagnostic
+    assert result.demand_basis == "dated_requests"
+    assert result.calendar_covered_days == 2
+    assert result.service_by_year[0]["demand_kwh"] == pytest.approx(expected)
+    assert result.service_by_year[0]["served_kwh"] == pytest.approx(expected)
+    assert result.verification["passed"] is True
 
 
 def test_public_request_survives_when_private_access_is_missing(mobility_spec):

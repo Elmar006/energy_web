@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -28,6 +29,108 @@ class DatasetReference(FiniteModel):
     license: str | None = None
     captured_at: str | None = None
     transform_version: str | None = Field(default=None, min_length=1, max_length=80)
+
+
+class DemandDataset(FiniteModel):
+    """Verified content-addressed artifact metadata; the engine never fetches it."""
+
+    schema_version: Literal["demand-dataset-v1"] = "demand-dataset-v1"
+    artifact_id: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    byte_size: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def check_identity(self):
+        if self.artifact_id != f"sha256:{self.sha256}":
+            raise ValueError("demand dataset artifact_id must match sha256")
+        return self
+
+
+class ServiceDay(FiniteModel):
+    date: date
+    day_type: Literal["weekday", "weekend", "holiday"]
+    season: Literal["winter", "spring", "summer", "autumn"]
+
+
+class ServiceCalendar(FiniteModel):
+    """A bounded, consecutive local-date execution horizon, including empty days."""
+
+    schema_version: Literal["service-calendar-v1"] = "service-calendar-v1"
+    time_zone: str = Field(min_length=1)
+    covered_dates: list[date] = Field(min_length=1, max_length=14)
+    request_zone_ids: list[str] = Field(min_length=1)
+    legacy_profile_zone_ids: list[str] = Field(default_factory=list)
+    annualization_factor: float = Field(gt=0)
+    annualization_basis: Literal["assumed_repeat"] = "assumed_repeat"
+    days: list[ServiceDay] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_dates(self):
+        try:
+            ZoneInfo(self.time_zone)
+        except (ZoneInfoNotFoundError, ValueError) as error:
+            raise ValueError("service_calendar.time_zone must be a valid IANA zone") from error
+        if self.covered_dates != sorted(set(self.covered_dates)):
+            raise ValueError("service_calendar.covered_dates must be sorted and unique")
+        if any(right != left + timedelta(days=1) for left, right in
+               zip(self.covered_dates, self.covered_dates[1:])):
+            raise ValueError("service_calendar.covered_dates must be consecutive")
+        if len(set(self.request_zone_ids)) != len(self.request_zone_ids):
+            raise ValueError("service_calendar.request_zone_ids must be unique")
+        if len(set(self.legacy_profile_zone_ids)) != len(self.legacy_profile_zone_ids):
+            raise ValueError("service_calendar.legacy_profile_zone_ids must be unique")
+        if set(self.request_zone_ids) & set(self.legacy_profile_zone_ids):
+            raise ValueError("service_calendar zone modes must not overlap")
+        if self.annualization_factor * len(self.covered_dates) > 366 + 1e-8:
+            raise ValueError("annualization_factor cannot imply more than 366 days per year")
+        seasons = {12: "winter", 1: "winter", 2: "winter", 3: "spring",
+                   4: "spring", 5: "spring", 6: "summer", 7: "summer",
+                   8: "summer", 9: "autumn", 10: "autumn", 11: "autumn"}
+        if not self.days:
+            self.days = [ServiceDay(date=day,
+                                    day_type="weekend" if day.weekday() >= 5 else "weekday",
+                                    season=seasons[day.month]) for day in self.covered_dates]
+        if [item.date for item in self.days] != self.covered_dates:
+            raise ValueError("service_calendar.days must align with covered_dates")
+        if any(item.season != seasons[item.date.month] for item in self.days):
+            raise ValueError("service_calendar season must match local calendar month")
+        return self
+
+
+class ChargingRequest(FiniteModel):
+    """Potential public energy from a supplied itinerary, not a completed session."""
+
+    request_id: str = Field(min_length=1)
+    vehicle_id: str = Field(min_length=1)
+    segment: Literal["private", "taxi", "fleet", "corridor"]
+    zone_id: str = Field(min_length=1)
+    arrival_at: datetime
+    deadline_at: datetime
+    energy_from_charger_kwh: float = Field(gt=0)
+    battery_kwh: float = Field(gt=0)
+    soc_before_kwh: float = Field(ge=0)
+    max_vehicle_kw: float = Field(gt=0)
+    charging_efficiency: float = Field(default=0.9, gt=0, le=1)
+    population_weight: float = Field(gt=0)
+    provenance: Provenance
+
+    @model_validator(mode="after")
+    def check_energy_window(self):
+        if (self.arrival_at.tzinfo is None or self.arrival_at.utcoffset() is None or
+                self.deadline_at.tzinfo is None or self.deadline_at.utcoffset() is None):
+            raise ValueError("charging request timestamps must be timezone-aware")
+        duration_hours = ((self.deadline_at.astimezone(timezone.utc) -
+                           self.arrival_at.astimezone(timezone.utc)).total_seconds() / 3600)
+        if duration_hours <= 0:
+            raise ValueError("charging request deadline must be after arrival")
+        if self.soc_before_kwh > self.battery_kwh + 1e-8:
+            raise ValueError("charging request SoC exceeds battery capacity")
+        if self.energy_from_charger_kwh * self.charging_efficiency > (
+                self.battery_kwh - self.soc_before_kwh) + 1e-7:
+            raise ValueError("charging request energy exceeds battery headroom")
+        if self.energy_from_charger_kwh > self.max_vehicle_kw * duration_hours + 1e-7:
+            raise ValueError("charging request exceeds vehicle power over parking window")
+        return self
 
 
 class SessionArrivalProfile(FiniteModel):
@@ -152,6 +255,28 @@ class TravelEdge(FiniteModel):
     minutes: float = Field(ge=0)
 
 
+class SiteTravelEdge(FiniteModel):
+    from_site_id: str = Field(min_length=1)
+    to_site_id: str = Field(min_length=1)
+    minutes: float = Field(gt=0)
+
+
+class OperationalOutage(FiniteModel):
+    """Deterministic station outage followed by repair in elapsed UTC minutes."""
+
+    schema_version: Literal["operational-outage-v1"] = "operational-outage-v1"
+    site_id: str = Field(min_length=1)
+    start_minute: int = Field(ge=0)
+    repair_minute: int = Field(gt=0)
+    provenance: Provenance
+
+    @model_validator(mode="after")
+    def check_window(self):
+        if self.repair_minute <= self.start_minute:
+            raise ValueError("outage repair_minute must follow start_minute")
+        return self
+
+
 class Parameters(FiniteModel):
     mode: Literal["operator", "city"]
     risk: Literal["worst_case", "expected", "expected_cvar"] = "worst_case"
@@ -196,8 +321,13 @@ class PlanningInput(FiniteModel):
     grid_nodes: list[GridNode]
     scenarios: list[Scenario]
     travel_edges: list[TravelEdge]
+    site_travel_edges: list[SiteTravelEdge] = Field(default_factory=list)
+    operational_outages: list[OperationalOutage] = Field(default_factory=list)
     parameters: Parameters
     datasets: list[DatasetReference] = Field(default_factory=list)
+    demand_dataset: DemandDataset | None = None
+    service_calendar: ServiceCalendar | None = None
+    charging_requests: list[ChargingRequest] = Field(default_factory=list)
     locked_site_ids: list[str] = Field(default_factory=list)
     excluded_site_ids: list[str] = Field(default_factory=list)
 
@@ -214,6 +344,42 @@ class PlanningInput(FiniteModel):
         nodes = {n.id for n in self.grid_nodes}
         if not self.zones or not self.sites or not self.scenarios:
             raise ValueError("zones, sites and scenarios are required")
+        if self.service_calendar is None and self.charging_requests:
+            raise ValueError("charging_requests require service_calendar")
+        if self.service_calendar is not None:
+            calendar = self.service_calendar
+            if self.time_zone is not None and self.time_zone != calendar.time_zone:
+                raise ValueError("service_calendar time_zone differs from planning time_zone")
+            if set(calendar.request_zone_ids) | set(calendar.legacy_profile_zone_ids) != zones:
+                raise ValueError("service_calendar must explicitly classify every zone")
+            request_ids = set()
+            request_energy = {zone_id: 0.0 for zone_id in calendar.request_zone_ids}
+            local_zone = ZoneInfo(calendar.time_zone)
+            first_day, last_day = calendar.covered_dates[0], calendar.covered_dates[-1]
+            horizon_start = datetime.combine(first_day, datetime.min.time(), local_zone)
+            horizon_end = datetime.combine(last_day + timedelta(days=1),
+                                           datetime.min.time(), local_zone)
+            for request in self.charging_requests:
+                if request.request_id in request_ids:
+                    raise ValueError("charging request IDs must be unique")
+                request_ids.add(request.request_id)
+                if request.zone_id not in request_energy:
+                    raise ValueError("charging request zone is not in request_zone_ids")
+                target_zone = next(item for item in self.zones if item.id == request.zone_id)
+                if request.segment != target_zone.group:
+                    raise ValueError("charging request segment differs from zone group")
+                if not (horizon_start.astimezone(timezone.utc) <= request.arrival_at.astimezone(timezone.utc)
+                        < request.deadline_at.astimezone(timezone.utc)
+                        <= horizon_end.astimezone(timezone.utc)):
+                    raise ValueError("charging request is outside service_calendar")
+                request_energy[request.zone_id] += (request.energy_from_charger_kwh *
+                                                    request.population_weight)
+            for zone in self.zones:
+                if zone.id not in request_energy:
+                    continue
+                average = request_energy[zone.id] / len(calendar.covered_dates)
+                if abs(sum(zone.hourly_kwh) - average) > max(1e-5, 1e-6 * average):
+                    raise ValueError("dated requests and representative zone energy disagree")
         if len(zones) != len(self.zones) or len(sites) != len(self.sites) or len(opts) != len(self.options) or len(nodes) != len(self.grid_nodes):
             raise ValueError("ids must be unique within each collection")
         for s in self.sites:
@@ -224,6 +390,19 @@ class PlanningInput(FiniteModel):
         for e in self.travel_edges:
             if e.zone_id not in zones or e.site_id not in sites:
                 raise ValueError("travel edge references unknown zone or site")
+        for e in self.site_travel_edges:
+            if e.from_site_id not in sites or e.to_site_id not in sites or e.from_site_id == e.to_site_id:
+                raise ValueError("site travel edge references invalid site pair")
+        outages_by_site: dict[str, list[OperationalOutage]] = {}
+        for outage in self.operational_outages:
+            if outage.site_id not in sites:
+                raise ValueError("outage references unknown site")
+            outages_by_site.setdefault(outage.site_id, []).append(outage)
+        for entries in outages_by_site.values():
+            ordered = sorted(entries, key=lambda item: item.start_minute)
+            if any(later.start_minute < earlier.repair_minute for earlier, later in
+                   zip(ordered, ordered[1:])):
+                raise ValueError("outage windows overlap at one site")
         if len({s.id for s in self.scenarios}) != len(self.scenarios):
             raise ValueError("scenario ids must be unique")
         if any(len(s.demand_multiplier) != len(self.parameters.years) for s in self.scenarios):
@@ -249,4 +428,6 @@ class PlanningInput(FiniteModel):
             raise ValueError("existing site cannot be excluded without a decommissioning model")
         if len({(e.zone_id, e.site_id) for e in self.travel_edges}) != len(self.travel_edges):
             raise ValueError("travel edges must be unique")
+        if len({(e.from_site_id, e.to_site_id) for e in self.site_travel_edges}) != len(self.site_travel_edges):
+            raise ValueError("site travel edges must be unique")
         return self

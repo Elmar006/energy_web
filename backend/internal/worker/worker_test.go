@@ -9,12 +9,15 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Elmar006/energy_web/backend/internal/artifact"
 	"github.com/Elmar006/energy_web/backend/internal/planning"
 )
 
@@ -79,6 +82,51 @@ func TestProcessingTimeoutCoversEffectiveBudgets(t *testing.T) {
 				t.Errorf("processingTimeout = %s, want %s", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestWorkerHydratesAndVerifiesDemandArtifactBeforeEngine(t *testing.T) {
+	local := artifact.Local{Root: t.TempDir()}
+	content := []byte(`{"schema_version":"demand-dataset-v1","service_calendar":{"schema_version":"service-calendar-v1"},"charging_requests":[]}`)
+	m, err := local.Put(context.Background(), content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, _ := json.Marshal(m)
+	job := testJob(t)
+	job.Spec = json.RawMessage(`{"id":"test","scenarios":[{"id":"base"}],"parameters":{"years":[2026]},"demand_dataset":` + string(manifest) + `}`)
+	called := false
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		requestBody, _ := io.ReadAll(r.Body)
+		var request struct {
+			Input map[string]json.RawMessage `json:"input"`
+		}
+		if err := json.Unmarshal(requestBody, &request); err != nil ||
+			len(request.Input["service_calendar"]) == 0 ||
+			string(request.Input["charging_requests"]) != "[]" {
+			t.Errorf("engine received unresolved demand: %s %v", requestBody, err)
+		}
+		_, _ = w.Write(bindEngineResult(engineResult(t, job, "optimal"), requestBody))
+	}))
+	defer engine.Close()
+	w := Worker{Artifacts: local, EngineURL: engine.URL}
+	result, code, detail := w.calculate(context.Background(), job)
+	if code != "" || !called {
+		t.Fatalf("calculation rejected verified demand: %s %s", code, detail)
+	}
+	var body struct {
+		Metadata map[string]json.RawMessage `json:"metadata"`
+	}
+	if json.Unmarshal(result, &body) != nil || string(body.Metadata["demand_dataset_sha256"]) != `"`+m.SHA256+`"` {
+		t.Fatalf("result lost demand artifact fingerprint: %s", result)
+	}
+	called = false
+	if err := os.WriteFile(filepath.Join(local.Root, m.SHA256[:2], m.SHA256+".json"), []byte(strings.Repeat("x", len(content))), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, code, _ := w.calculate(context.Background(), job); code != "artifact_error" || called {
+		t.Fatalf("tampered demand reached engine: %s called=%t", code, called)
 	}
 }
 

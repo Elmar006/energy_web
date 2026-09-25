@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/Elmar006/energy_web/backend/internal/artifact"
 	"github.com/Elmar006/energy_web/backend/internal/planning"
 )
 
@@ -29,6 +30,7 @@ type Repository interface {
 
 type Worker struct {
 	Store     Repository
+	Artifacts artifact.Reader
 	EngineURL string
 	Client    *http.Client
 
@@ -135,9 +137,11 @@ func processingTimeout(spec planning.RunSpec) time.Duration {
 	// This is a worker HTTP wait budget, not an isolated process kill or a
 	// guarantee that a configured solver time limit bounds model construction.
 	// Allow each primary/counterfactual solve, every requested alternative, and
-	// ten extra minutes for simulation, model construction and serialization.
-	seconds := (1+spec.ExplainTopN)*spec.SolverSeconds +
-		len(spec.AlternativeServiceFractions)*spec.AlternativeSolverSeconds + 600
+	// ten extra minutes per improvement round for development simulations,
+	// final held-out simulation, model construction and serialization.
+	seconds := (1+spec.MaxImprovementIterations)*(1+spec.ExplainTopN)*spec.SolverSeconds +
+		len(spec.AlternativeServiceFractions)*spec.AlternativeSolverSeconds +
+		600*(1+spec.MaxImprovementIterations)
 	return time.Duration(seconds) * time.Second
 }
 
@@ -145,10 +149,14 @@ func (w *Worker) calculate(ctx context.Context, job planning.Job) (json.RawMessa
 	if err := job.RunSpec.Validate(); err != nil {
 		return nil, "invalid_run_spec", err.Error()
 	}
+	input, demandManifest, err := artifact.HydrateDemand(ctx, job.Spec, w.Artifacts)
+	if err != nil {
+		return nil, "artifact_error", err.Error()
+	}
 	payload, err := json.Marshal(struct {
 		Input   json.RawMessage  `json:"input"`
 		RunSpec planning.RunSpec `json:"run_spec"`
-	}{Input: job.Spec, RunSpec: job.RunSpec})
+	}{Input: input, RunSpec: job.RunSpec})
 	if err != nil {
 		return nil, "invalid_input", err.Error()
 	}
@@ -231,6 +239,9 @@ func (w *Worker) calculate(ctx context.Context, job planning.Job) (json.RawMessa
 		"execution_sha256":         job.ExecutionSHA256,
 	} {
 		metadata[key], _ = json.Marshal(value)
+	}
+	if demandManifest != nil {
+		metadata["demand_dataset_sha256"], _ = json.Marshal(demandManifest.SHA256)
 	}
 	body["metadata"], _ = json.Marshal(metadata)
 	output, err := json.Marshal(body)

@@ -205,4 +205,4 @@ docker compose up -d --build
 
 `down` останавливает сервисы и **сохраняет** PostgreSQL volume. Не добавляйте `-v`, если хотите сохранить сценарии, результаты и загруженные данные. Сервис `migrate` перед запуском API/worker применяет новые нумерованные SQL-файлы и проверяет контрольные суммы уже применённых. Для ручной проверки используйте `docker compose run --rm migrate`. Перед существенным обновлением сохраните резервную копию базы; не редактируйте уже применённую миграцию, добавьте следующую.
 
-Для архитектуры и фактически реализованных возможностей см. [README](README.md), [статус реализации](docs/IMPLEMENTATION_STATUS.md), [backend-план](docs/BACKEND_EXECUTION.md), [контракт для фронтенда](docs/frontend/BACKEND_HANDOFF.md) и [runbook](docs/RUNBOOK.md).
+Для архитектуры и фактически реализованных возможностей см. [каталог документации](docs/README.md), [архитектуру](docs/ARCHITECTURE.md), [статус реализации](docs/IMPLEMENTATION_STATUS.md), [roadmap](docs/ROADMAP.md), [контракт для фронтенда](docs/frontend/BACKEND_HANDOFF.md) и [runbook](docs/RUNBOOK.md).

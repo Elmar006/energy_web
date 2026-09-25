@@ -81,6 +81,98 @@
         "title": "ChargerOption",
         "type": "object"
       },
+      "ChargingRequest": {
+        "additionalProperties": false,
+        "description": "Potential public energy from a supplied itinerary, not a completed session.",
+        "properties": {
+          "request_id": {
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "vehicle_id": {
+            "minLength": 1,
+            "title": "Vehicle Id",
+            "type": "string"
+          },
+          "segment": {
+            "enum": [
+              "private",
+              "taxi",
+              "fleet",
+              "corridor"
+            ],
+            "title": "Segment",
+            "type": "string"
+          },
+          "zone_id": {
+            "minLength": 1,
+            "title": "Zone Id",
+            "type": "string"
+          },
+          "arrival_at": {
+            "format": "date-time",
+            "title": "Arrival At",
+            "type": "string"
+          },
+          "deadline_at": {
+            "format": "date-time",
+            "title": "Deadline At",
+            "type": "string"
+          },
+          "energy_from_charger_kwh": {
+            "exclusiveMinimum": 0,
+            "title": "Energy From Charger Kwh",
+            "type": "number"
+          },
+          "battery_kwh": {
+            "exclusiveMinimum": 0,
+            "title": "Battery Kwh",
+            "type": "number"
+          },
+          "soc_before_kwh": {
+            "minimum": 0,
+            "title": "Soc Before Kwh",
+            "type": "number"
+          },
+          "max_vehicle_kw": {
+            "exclusiveMinimum": 0,
+            "title": "Max Vehicle Kw",
+            "type": "number"
+          },
+          "charging_efficiency": {
+            "default": 0.9,
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "title": "Charging Efficiency",
+            "type": "number"
+          },
+          "population_weight": {
+            "exclusiveMinimum": 0,
+            "title": "Population Weight",
+            "type": "number"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          }
+        },
+        "required": [
+          "request_id",
+          "vehicle_id",
+          "segment",
+          "zone_id",
+          "arrival_at",
+          "deadline_at",
+          "energy_from_charger_kwh",
+          "battery_kwh",
+          "soc_before_kwh",
+          "max_vehicle_kw",
+          "population_weight",
+          "provenance"
+        ],
+        "title": "ChargingRequest",
+        "type": "object"
+      },
       "DatasetReference": {
         "additionalProperties": false,
         "properties": {
@@ -198,6 +290,40 @@
           "sha256"
         ],
         "title": "DatasetReference",
+        "type": "object"
+      },
+      "DemandDataset": {
+        "additionalProperties": false,
+        "description": "Verified content-addressed artifact metadata; the engine never fetches it.",
+        "properties": {
+          "schema_version": {
+            "const": "demand-dataset-v1",
+            "default": "demand-dataset-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "artifact_id": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "byte_size": {
+            "exclusiveMinimum": 0,
+            "title": "Byte Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "sha256",
+          "byte_size"
+        ],
+        "title": "DemandDataset",
         "type": "object"
       },
       "GridNode": {
@@ -487,6 +613,110 @@
         "title": "Scenario",
         "type": "object"
       },
+      "ServiceCalendar": {
+        "additionalProperties": false,
+        "description": "A bounded, consecutive local-date execution horizon, including empty days.",
+        "properties": {
+          "schema_version": {
+            "const": "service-calendar-v1",
+            "default": "service-calendar-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "time_zone": {
+            "minLength": 1,
+            "title": "Time Zone",
+            "type": "string"
+          },
+          "covered_dates": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "maxItems": 14,
+            "minItems": 1,
+            "title": "Covered Dates",
+            "type": "array"
+          },
+          "request_zone_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Request Zone Ids",
+            "type": "array"
+          },
+          "legacy_profile_zone_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Legacy Profile Zone Ids",
+            "type": "array"
+          },
+          "annualization_factor": {
+            "exclusiveMinimum": 0,
+            "title": "Annualization Factor",
+            "type": "number"
+          },
+          "annualization_basis": {
+            "const": "assumed_repeat",
+            "default": "assumed_repeat",
+            "title": "Annualization Basis",
+            "type": "string"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/ServiceDay"
+            },
+            "title": "Days",
+            "type": "array"
+          }
+        },
+        "required": [
+          "time_zone",
+          "covered_dates",
+          "request_zone_ids",
+          "annualization_factor"
+        ],
+        "title": "ServiceCalendar",
+        "type": "object"
+      },
+      "ServiceDay": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "day_type": {
+            "enum": [
+              "weekday",
+              "weekend",
+              "holiday"
+            ],
+            "title": "Day Type",
+            "type": "string"
+          },
+          "season": {
+            "enum": [
+              "winter",
+              "spring",
+              "summer",
+              "autumn"
+            ],
+            "title": "Season",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "day_type",
+          "season"
+        ],
+        "title": "ServiceDay",
+        "type": "object"
+      },
       "SessionArrivalProfile": {
         "additionalProperties": false,
         "description": "Supplied sessions starting in each local hour of a representative day.\n\nQuantiles are the empirical inverse CDF at probabilities 0, 0.01, ..., 1.\nThey describe *delivered* session energy, not unobserved demand.",
@@ -672,6 +902,33 @@
           "provenance"
         ],
         "title": "Site",
+        "type": "object"
+      },
+      "SiteTravelEdge": {
+        "additionalProperties": false,
+        "properties": {
+          "from_site_id": {
+            "minLength": 1,
+            "title": "From Site Id",
+            "type": "string"
+          },
+          "to_site_id": {
+            "minLength": 1,
+            "title": "To Site Id",
+            "type": "string"
+          },
+          "minutes": {
+            "exclusiveMinimum": 0,
+            "title": "Minutes",
+            "type": "number"
+          }
+        },
+        "required": [
+          "from_site_id",
+          "to_site_id",
+          "minutes"
+        ],
+        "title": "SiteTravelEdge",
         "type": "object"
       },
       "TravelEdge": {
@@ -1293,6 +1550,13 @@
             "title": "Travel Edges",
             "type": "array"
           },
+          "site_travel_edges": {
+            "items": {
+              "$ref": "#/components/schemas/SiteTravelEdge"
+            },
+            "title": "Site Travel Edges",
+            "type": "array"
+          },
           "parameters": {
             "$ref": "#/components/schemas/Parameters"
           },
@@ -1301,6 +1565,35 @@
               "$ref": "#/components/schemas/DatasetReference"
             },
             "title": "Datasets",
+            "type": "array"
+          },
+          "demand_dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DemandDataset"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "service_calendar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServiceCalendar"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "charging_requests": {
+            "items": {
+              "$ref": "#/components/schemas/ChargingRequest"
+            },
+            "title": "Charging Requests",
             "type": "array"
           },
           "locked_site_ids": {
@@ -1489,6 +1782,7 @@
             "type": "array"
           },
           "source": {
+            "maxLength": 2048,
             "minLength": 1,
             "title": "Source",
             "type": "string"
@@ -1504,6 +1798,7 @@
           "license": {
             "anyOf": [
               {
+                "maxLength": 2048,
                 "type": "string"
               },
               {
@@ -1541,77 +1836,29 @@
         "title": "MobilityInput",
         "type": "object"
       },
-      "ChargingRequest": {
+      "DemandArtifactDocument": {
+        "type": "object",
         "additionalProperties": false,
-        "properties": {
-          "vehicle_id": {
-            "title": "Vehicle Id",
-            "type": "string"
-          },
-          "segment": {
-            "enum": [
-              "private",
-              "taxi",
-              "fleet",
-              "corridor"
-            ],
-            "title": "Segment",
-            "type": "string"
-          },
-          "zone_id": {
-            "title": "Zone Id",
-            "type": "string"
-          },
-          "arrival_at": {
-            "format": "date-time",
-            "title": "Arrival At",
-            "type": "string"
-          },
-          "deadline_at": {
-            "format": "date-time",
-            "title": "Deadline At",
-            "type": "string"
-          },
-          "energy_from_charger_kwh": {
-            "exclusiveMinimum": 0,
-            "title": "Energy From Charger Kwh",
-            "type": "number"
-          },
-          "battery_kwh": {
-            "exclusiveMinimum": 0,
-            "title": "Battery Kwh",
-            "type": "number"
-          },
-          "soc_before_kwh": {
-            "minimum": 0,
-            "title": "Soc Before Kwh",
-            "type": "number"
-          },
-          "max_vehicle_kw": {
-            "exclusiveMinimum": 0,
-            "title": "Max Vehicle Kw",
-            "type": "number"
-          },
-          "population_weight": {
-            "exclusiveMinimum": 0,
-            "title": "Population Weight",
-            "type": "number"
-          }
-        },
         "required": [
-          "vehicle_id",
-          "segment",
-          "zone_id",
-          "arrival_at",
-          "deadline_at",
-          "energy_from_charger_kwh",
-          "battery_kwh",
-          "soc_before_kwh",
-          "max_vehicle_kw",
-          "population_weight"
+          "schema_version",
+          "service_calendar",
+          "charging_requests"
         ],
-        "title": "ChargingRequest",
-        "type": "object"
+        "properties": {
+          "schema_version": {
+            "const": "demand-dataset-v1",
+            "type": "string"
+          },
+          "service_calendar": {
+            "$ref": "#/components/schemas/ServiceCalendar"
+          },
+          "charging_requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChargingRequest"
+            }
+          }
+        }
       },
       "MobilityCompileRequest": {
         "type": "object",
@@ -1925,9 +2172,9 @@
           }
         }
       },
-      "RunSpec": {
+      "RunSpecV1": {
         "additionalProperties": false,
-        "description": "Fully resolved immutable execution controls, persisted when the run is queued.",
+        "description": "Fully resolved immutable execution controls, persisted when queued.",
         "properties": {
           "schema_version": {
             "const": "run-spec-v1",
@@ -2012,7 +2259,7 @@
             "$ref": "#/components/schemas/ServiceRequirements"
           }
         },
-        "title": "RunSpec",
+        "title": "RunSpecV1",
         "type": "object",
         "allOf": [
           {
@@ -2051,9 +2298,162 @@
           "simulation_days"
         ]
       },
-      "RunSpecOverrides": {
+      "RunSpecV2": {
         "additionalProperties": false,
-        "description": "Optional execution overrides; omitted solver_seconds/simulation_days inherit the saved scenario. Null fields are rejected. Validation mode requires at least 30 distinct seeds. Service requirements, when supplied, gate the simulated operational result only.",
+        "description": "Fully resolved immutable execution controls, persisted when queued.",
+        "properties": {
+          "schema_version": {
+            "const": "run-spec-v2",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "model_version": {
+            "const": "planner-mip-v3",
+            "default": "planner-mip-v3",
+            "title": "Model Version",
+            "type": "string"
+          },
+          "simulation_version": {
+            "const": "simpy-multiday-v1",
+            "default": "simpy-multiday-v1",
+            "title": "Simulation Version",
+            "type": "string"
+          },
+          "mode": {
+            "default": "exploratory",
+            "enum": [
+              "exploratory",
+              "validation"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "simulation_seeds": {
+            "items": {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Simulation Seeds",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "explain_top_n": {
+            "default": 3,
+            "maximum": 10,
+            "minimum": 0,
+            "title": "Explain Top N",
+            "type": "integer"
+          },
+          "alternative_service_fractions": {
+            "items": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "maxItems": 5,
+            "title": "Alternative Service Fractions",
+            "type": "array",
+            "uniqueItems": true,
+            "description": "Strictly increasing fractions; an empty array disables alternatives."
+          },
+          "alternative_solver_seconds": {
+            "default": 20,
+            "maximum": 60,
+            "minimum": 1,
+            "title": "Alternative Solver Seconds",
+            "type": "integer"
+          },
+          "solver_seconds": {
+            "description": "When omitted, inherits input.parameters.solver_seconds.",
+            "maximum": 3600,
+            "minimum": 1,
+            "title": "Solver Seconds",
+            "type": "integer"
+          },
+          "simulation_days": {
+            "description": "When omitted, inherits input.parameters.simulation_days.",
+            "maximum": 14,
+            "minimum": 1,
+            "title": "Simulation Days",
+            "type": "integer"
+          },
+          "service_requirements": {
+            "$ref": "#/components/schemas/ServiceRequirements"
+          },
+          "development_seeds": {
+            "items": {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 30,
+            "title": "Development Seeds",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "max_improvement_iterations": {
+            "default": 0,
+            "maximum": 3,
+            "minimum": 0,
+            "title": "Max Improvement Iterations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "model_version",
+          "simulation_version",
+          "mode",
+          "simulation_seeds",
+          "explain_top_n",
+          "alternative_service_fractions",
+          "alternative_solver_seconds",
+          "solver_seconds",
+          "simulation_days"
+        ],
+        "title": "RunSpecV2",
+        "type": "object",
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "const": "validation"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "simulation_seeds"
+              ],
+              "properties": {
+                "simulation_seeds": {
+                  "minItems": 30
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RunSpec": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RunSpecV1"
+          },
+          {
+            "$ref": "#/components/schemas/RunSpecV2"
+          }
+        ]
+      },
+      "RunSpecOverridesV1": {
+        "additionalProperties": false,
+        "description": "Optional execution overrides. V2 separates development and final holdout seeds; only holdout simulations count toward acceptance.",
         "properties": {
           "schema_version": {
             "const": "run-spec-v1",
@@ -2138,7 +2538,7 @@
             "$ref": "#/components/schemas/ServiceRequirements"
           }
         },
-        "title": "RunSpecOverrides",
+        "title": "RunSpecOverridesV1",
         "type": "object",
         "allOf": [
           {
@@ -2164,6 +2564,222 @@
             }
           }
         ]
+      },
+      "RunSpecOverridesV2": {
+        "additionalProperties": false,
+        "description": "Optional execution overrides. V2 separates development and final holdout seeds; only holdout simulations count toward acceptance.",
+        "properties": {
+          "schema_version": {
+            "const": "run-spec-v2",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "model_version": {
+            "const": "planner-mip-v3",
+            "default": "planner-mip-v3",
+            "title": "Model Version",
+            "type": "string"
+          },
+          "simulation_version": {
+            "const": "simpy-multiday-v1",
+            "default": "simpy-multiday-v1",
+            "title": "Simulation Version",
+            "type": "string"
+          },
+          "mode": {
+            "default": "exploratory",
+            "enum": [
+              "exploratory",
+              "validation"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "simulation_seeds": {
+            "items": {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Simulation Seeds",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "explain_top_n": {
+            "default": 3,
+            "maximum": 10,
+            "minimum": 0,
+            "title": "Explain Top N",
+            "type": "integer"
+          },
+          "alternative_service_fractions": {
+            "items": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "maxItems": 5,
+            "title": "Alternative Service Fractions",
+            "type": "array",
+            "uniqueItems": true,
+            "description": "Strictly increasing fractions; an empty array disables alternatives."
+          },
+          "alternative_solver_seconds": {
+            "default": 20,
+            "maximum": 60,
+            "minimum": 1,
+            "title": "Alternative Solver Seconds",
+            "type": "integer"
+          },
+          "solver_seconds": {
+            "description": "When omitted, inherits input.parameters.solver_seconds.",
+            "maximum": 3600,
+            "minimum": 1,
+            "title": "Solver Seconds",
+            "type": "integer"
+          },
+          "simulation_days": {
+            "description": "When omitted, inherits input.parameters.simulation_days.",
+            "maximum": 14,
+            "minimum": 1,
+            "title": "Simulation Days",
+            "type": "integer"
+          },
+          "service_requirements": {
+            "$ref": "#/components/schemas/ServiceRequirements"
+          },
+          "development_seeds": {
+            "items": {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 30,
+            "title": "Development Seeds",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "max_improvement_iterations": {
+            "default": 0,
+            "maximum": 3,
+            "minimum": 0,
+            "title": "Max Improvement Iterations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version"
+        ],
+        "title": "RunSpecOverridesV2",
+        "type": "object",
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "const": "validation"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "simulation_seeds"
+              ],
+              "properties": {
+                "simulation_seeds": {
+                  "minItems": 30
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RunSpecOverrides": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RunSpecOverridesV1"
+          },
+          {
+            "$ref": "#/components/schemas/RunSpecOverridesV2"
+          }
+        ]
+      },
+      "ImprovementIteration": {
+        "type": "object",
+        "required": [
+          "iteration"
+        ],
+        "properties": {
+          "iteration": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "forced_site_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "optimization_status": {
+            "type": "string"
+          },
+          "physical_verification_passed": {
+            "type": "boolean"
+          },
+          "development_score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "development": {
+            "type": "object"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "selected_for_holdout": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ImprovementTrace": {
+        "type": "object",
+        "required": [
+          "method",
+          "development_seeds",
+          "holdout_seeds_used_for_selection",
+          "iterations"
+        ],
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "development_seeds": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "holdout_seeds_used_for_selection": {
+            "const": false
+          },
+          "iterations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImprovementIteration"
+            }
+          }
+        }
       },
       "RunRequest": {
         "type": "object",
@@ -3232,6 +3848,10 @@
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
           },
+          "demand_dataset_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
           "engine_source_files": {
             "type": "array",
             "items": {
@@ -3269,6 +3889,9 @@
           },
           "service_acceptance": {
             "$ref": "#/components/schemas/ServiceAcceptance"
+          },
+          "improvement": {
+            "$ref": "#/components/schemas/ImprovementTrace"
           },
           "simulation": {
             "type": "array",
@@ -3348,14 +3971,16 @@
             "type": "string",
             "enum": [
               "geojson",
-              "csv"
+              "csv",
+              "mobility"
             ]
           },
           "role": {
             "type": "string",
             "enum": [
               "demand_sessions",
-              "grid_headroom"
+              "grid_headroom",
+              "mobility_source"
             ]
           },
           "captured_at": {
@@ -3746,6 +4371,74 @@
           },
           "422": {
             "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/artifacts/demand": {
+      "post": {
+        "summary": "Upload immutable dated charging demand",
+        "description": "Stores the exact JSON bytes under their SHA-256 content address. The returned DemandDataset manifest can be placed in ScenarioSpec.demand_dataset without inline service_calendar or charging_requests. Go verifies and hydrates it for validation and again before handing a run to the engine. Requires ARTIFACT_DIR shared by API and worker; no arbitrary URLs are accepted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemandArtifactDocument"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemandDataset"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Artifact exceeds 64 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Artifact storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
             "content": {
               "application/json": {
                 "schema": {
