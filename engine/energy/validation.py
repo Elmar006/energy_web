@@ -39,7 +39,13 @@ def describe_input_quality(spec: PlanningInput) -> dict:
     if parametric:
         warnings.append("Zones without session profiles infer arrivals from hourly energy and assumed mean session size.")
     if mobility_zones:
-        warnings.append("Mobility-derived zones represent potential public charging from supplied trips; the day profiles are averaged and simulation re-samples arrivals rather than replaying the requests.")
+        if spec.service_calendar is not None:
+            warnings.append("Dated mobility requests represent potential public charging from supplied trips and parking windows; no population representativeness or external calibration is established.")
+            warnings.append("Calendar annualization repeats the supplied dated horizon by an explicit scenario factor; it is not a measured annual demand or locally validated NPV.")
+            if spec.service_calendar.legacy_profile_zone_ids:
+                warnings.append("Some zones use an explicitly declared representative 24-hour profile alongside dated requests; those zones are scenario assumptions, not dated observations.")
+        else:
+            warnings.append("Mobility-derived zones represent potential public charging from supplied trips; legacy day profiles are averaged and simulation re-samples arrivals rather than replaying the requests.")
         if any(source["source_kind"] == "observed" for source in mobility_sources):
             warnings.append("Observed mobility source labels are supplied by the importer and have not been independently verified.")
     if any(zone.arrival_profile is not None and
@@ -54,6 +60,9 @@ def describe_input_quality(spec: PlanningInput) -> dict:
         "parametric_zone_ids": parametric,
         "mobility_derived_zone_ids": mobility_zones,
         "mobility_sources": mobility_sources,
+        "temporal_demand_mode": "dated_requests" if spec.service_calendar is not None else "representative_24h",
+        "dated_covered_days": (len(spec.service_calendar.covered_dates)
+                               if spec.service_calendar is not None else None),
         "unverified_coverage_zone_ids": unverified_coverage,
         "claimed_complete_coverage_zone_ids": claimed_coverage,
         "demand_scope": ("mobility_potential" if len(mobility_zones) == len(spec.zones) else
@@ -101,8 +110,9 @@ def compare_operations(result: SolveResult, simulations: list[dict]) -> list[dic
 def compare_economics(spec: PlanningInput, result: SolveResult, simulations: list[dict]) -> list[dict]:
     """Reprice simulated energy flows using the same nominal assumptions as the MILP.
 
-    The estimate still extrapolates representative days by 365. It captures
-    queues and the dispatch policy's grid/battery use, not measured annual NPV.
+    The estimate extrapolates a representative day or an explicitly weighted
+    dated horizon. It captures queues and causal grid/battery use, not a
+    measured annual cash flow or independently validated local NPV.
     """
     by_scenario_seed: dict[tuple[str, int], dict[int, dict]] = defaultdict(dict)
     for run in simulations:
@@ -128,7 +138,10 @@ def compare_economics(spec: PlanningInput, result: SolveResult, simulations: lis
                             for item in result.selected if item["year"] <= year)
                 grid = sum(site["grid_kwh"] for site in run["dispatch_by_site"])
                 discharged = sum(site["battery_discharge_kwh"] for site in run["dispatch_by_site"])
-                annual = 365 / run.get("simulation_days", 1) * (
+                annualizer = (spec.service_calendar.annualization_factor
+                              if spec.service_calendar is not None
+                              else 365 / run.get("simulation_days", 1))
+                annual = annualizer * (
                     run["energy_kwh"] * par.sale_rub_per_kwh * scenario.tariff_multiplier
                     - grid * par.purchase_rub_per_kwh
                     - discharged * par.storage_degradation_rub_per_kwh
@@ -141,6 +154,11 @@ def compare_economics(spec: PlanningInput, result: SolveResult, simulations: lis
         simulated = mean(npvs)
         rows.append({
             "scenario_id": scenario.id, "seeds": len(npvs),
+            "annualization_basis": ("assumed_repeat_dated_horizon"
+                                     if spec.service_calendar is not None
+                                     else "assumed_repeat_representative_day"),
+            "annualization_factor": (spec.service_calendar.annualization_factor
+                                     if spec.service_calendar is not None else None),
             "optimized_npv_rub": round(optimized, 2),
             "simulated_npv_rub_mean": round(simulated, 2),
             "simulated_npv_rub_min": round(min(npvs), 2),

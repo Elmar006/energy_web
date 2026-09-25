@@ -17,7 +17,8 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .contracts import DatasetReference, PlanningInput, Provenance
+from .contracts import (ChargingRequest, DatasetReference, PlanningInput,
+                        Provenance, ServiceCalendar)
 from .run_spec import engine_source_manifest
 
 
@@ -97,19 +98,6 @@ class MobilityInput(_FiniteModel):
         return self
 
 
-class ChargingRequest(_FiniteModel):
-    vehicle_id: str
-    segment: Literal["private", "taxi", "fleet", "corridor"]
-    zone_id: str
-    arrival_at: datetime
-    deadline_at: datetime
-    energy_from_charger_kwh: float = Field(gt=0)
-    battery_kwh: float = Field(gt=0)
-    soc_before_kwh: float = Field(ge=0)
-    max_vehicle_kw: float = Field(gt=0)
-    population_weight: float = Field(gt=0)
-
-
 def _valid_local_instant(value: datetime, zone: ZoneInfo) -> bool:
     if value.tzinfo is None or value.utcoffset() is None:
         return False
@@ -132,6 +120,11 @@ def compile_mobility(spec: PlanningInput, mobility: MobilityInput) -> dict:
     not an independently validated year-long forecast.
     """
     zone = ZoneInfo(mobility.time_zone)
+    if len(mobility.covered_dates) > 14:
+        raise ValueError("dated service_calendar supports at most 14 consecutive days")
+    source_bytes = json.dumps(mobility.model_dump(mode="json"), ensure_ascii=False,
+                              sort_keys=True, separators=(",", ":")).encode("utf-8")
+    source_hash = hashlib.sha256(source_bytes).hexdigest()
     if spec.time_zone is not None and spec.time_zone != mobility.time_zone:
         raise ValueError("mobility time_zone differs from scenario time_zone")
     zones = {item.id: item for item in spec.zones}
@@ -255,11 +248,15 @@ def compile_mobility(spec: PlanningInput, mobility: MobilityInput) -> dict:
             private_metered_kwh += private_metered
             soc += private_metered * vehicle.charging_efficiency
             requests.append(ChargingRequest(
+                request_id=f"{vehicle.id}:{index}",
                 vehicle_id=vehicle.id, segment=vehicle.segment, zone_id=activity.zone_id,
                 arrival_at=public_arrival, deadline_at=activity.end_at,
                 energy_from_charger_kwh=public_metered, battery_kwh=vehicle.battery_kwh,
                 soc_before_kwh=soc, max_vehicle_kw=vehicle.max_charge_kw,
-                population_weight=vehicle.population_weight))
+                charging_efficiency=vehicle.charging_efficiency,
+                population_weight=vehicle.population_weight,
+                provenance=Provenance(source=f"mobility-v1:{source_hash}:{mobility.source}",
+                                      kind="derived")))
             public_metered_kwh += public_metered
             soc += public_metered * vehicle.charging_efficiency  # virtual projection only
         residual = initial + (private_metered_kwh + public_metered_kwh) * vehicle.charging_efficiency - driven_kwh - soc
@@ -274,9 +271,6 @@ def compile_mobility(spec: PlanningInput, mobility: MobilityInput) -> dict:
                        "public_requested_metered_kwh": public_metered_kwh,
                        "projected_final_kwh": soc, "balance_error_kwh": residual})
 
-    source_bytes = json.dumps(mobility.model_dump(mode="json"), ensure_ascii=False,
-                              sort_keys=True, separators=(",", ":")).encode("utf-8")
-    source_hash = hashlib.sha256(source_bytes).hexdigest()
     compiler_source_hash, _ = engine_source_manifest()
     by_zone_hour: dict[str, list[float]] = {id_: [0.0] * 24 for id_ in replaced}
     by_zone_weight: dict[str, float] = defaultdict(float)
@@ -291,6 +285,12 @@ def compile_mobility(spec: PlanningInput, mobility: MobilityInput) -> dict:
         by_date[local.date()].setdefault(request.zone_id, [0.0] * 24)[local.hour] += weighted
     output = spec.model_copy(deep=True)
     output.time_zone = mobility.time_zone
+    output.service_calendar = ServiceCalendar(
+        time_zone=mobility.time_zone, covered_dates=mobility.covered_dates,
+        request_zone_ids=mobility.replace_zone_ids,
+        legacy_profile_zone_ids=sorted(set(zones) - replaced),
+        annualization_factor=365 / len(covered))
+    output.charging_requests = requests
     for item in output.zones:
         if item.id not in replaced:
             continue

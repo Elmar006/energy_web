@@ -69,7 +69,7 @@ class RunSpec(BaseModel):
         for field in ("solver_seconds", "simulation_days"):
             if field not in self.model_fields_set:
                 settings[field] = getattr(planning_input.parameters, field)
-        return RunSpec.model_validate(settings)
+        return type(self).model_validate(settings)
 
     def apply(self, planning_input: PlanningInput) -> PlanningInput:
         """Apply resolved execution overrides to a private scenario copy."""
@@ -80,6 +80,32 @@ class RunSpec(BaseModel):
         return effective
 
 
+class RunSpecV2(RunSpec):
+    """Opt-in development/holdout protocol for bounded plan improvement.
+
+    ``simulation_seeds`` remain the final, untouched validation sample. The
+    development sample may select investments, so its statistics must never be
+    reported as an independent acceptance result.
+    """
+
+    schema_version: Literal["run-spec-v2"]
+    development_seeds: list[Seed] = Field(default_factory=list, max_length=30)
+    max_improvement_iterations: int = Field(default=0, ge=0, le=3)
+
+    @model_validator(mode="after")
+    def validate_improvement(self):
+        if len(set(self.development_seeds)) != len(self.development_seeds):
+            raise ValueError("development_seeds must be unique")
+        if set(self.development_seeds) & set(self.simulation_seeds):
+            raise ValueError("development_seeds and simulation_seeds must be disjoint")
+        if self.max_improvement_iterations and (
+            self.mode != "validation" or self.service_requirements is None
+            or len(self.development_seeds) < 2
+        ):
+            raise ValueError("improvement requires validation, service requirements and two development seeds")
+        return self
+
+
 def input_sha256(planning_input: PlanningInput) -> str:
     snapshot = planning_input.model_dump(mode="json")
     # This optional provenance attribute was added after the locked commission
@@ -87,6 +113,15 @@ def input_sha256(planning_input: PlanningInput) -> str:
     for dataset in snapshot["datasets"]:
         if dataset.get("source_kind") is None:
             dataset.pop("source_kind", None)
+    # Additive dated-demand fields must not re-identify historical immutable
+    # snapshots that had no such dataset. Retain an explicit empty request list
+    # when a calendar is present: zero demand on a covered day is meaningful.
+    if snapshot.get("demand_dataset") is None:
+        snapshot.pop("demand_dataset", None)
+    if snapshot.get("service_calendar") is None:
+        snapshot.pop("service_calendar", None)
+        if not snapshot.get("charging_requests"):
+            snapshot.pop("charging_requests", None)
     canonical = json.dumps(snapshot, ensure_ascii=False,
                            sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()

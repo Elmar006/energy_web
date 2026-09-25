@@ -59,6 +59,9 @@ services:
       API_ADDR: :8080
       REDIS_ADDR: redis:6379
       ENGINE_URL: http://engine:8090
+      ARTIFACT_DIR: /data/artifacts
+    volumes:
+      - artifact_data:/data/artifacts
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
@@ -72,6 +75,9 @@ services:
     environment:
       DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:-energy_dev}@db:5432/energy?sslmode=disable
       ENGINE_URL: http://engine:8090
+      ARTIFACT_DIR: /data/artifacts
+    volumes:
+      - artifact_data:/data/artifacts
     depends_on:
       migrate: {condition: service_completed_successfully}
       engine: {condition: service_healthy}
@@ -91,3 +97,4 @@ services:
 
 volumes:
   postgres_data:
+  artifact_data:

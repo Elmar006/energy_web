@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Elmar006/energy_web/backend/internal/artifact"
 	"github.com/Elmar006/energy_web/backend/internal/planning"
 	"github.com/Elmar006/energy_web/backend/internal/store"
 	"github.com/redis/go-redis/v9"
@@ -22,6 +23,7 @@ type Server struct {
 	Token     string
 	Cache     *redis.Client
 	EngineURL string
+	Artifacts artifact.Store
 }
 
 func (s Server) scenarioQueries() planning.Queries { return planning.Queries{Repository: s.Store} }
@@ -58,6 +60,7 @@ func (s Server) Handler() http.Handler {
 		writeJSON(w, 200, map[string]string{"status": "ready"})
 	})
 	mux.HandleFunc("POST /api/v1/scenarios", s.createScenario)
+	mux.HandleFunc("POST /api/v1/artifacts/demand", s.uploadDemandArtifact)
 	mux.HandleFunc("POST /api/v1/scenarios/from-datasets/preview", s.previewDatasetScenario)
 	mux.HandleFunc("POST /api/v1/scenarios/from-mobility/preview", s.previewMobilityScenario)
 	mux.HandleFunc("POST /api/v1/scenarios/from-mobility", s.createMobilityScenario)
@@ -111,7 +114,7 @@ func (s Server) createScenario(w http.ResponseWriter, r *http.Request) {
 	}
 	saved, err := (planning.Service{
 		Repository: s.Store,
-		Validator:  planning.HTTPValidator{URL: s.EngineURL},
+		Validator:  planning.ArtifactValidator{Next: planning.HTTPValidator{URL: s.EngineURL}, Reader: s.Artifacts},
 	}).CreateScenario(r.Context(), in.Name, in.Spec)
 	if errors.Is(err, planning.ErrInvalidScenario) {
 		fail(w, 422, "invalid_scenario", err.Error())
@@ -126,6 +129,29 @@ func (s Server) createScenario(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 201, saved)
+}
+
+func (s Server) uploadDemandArtifact(w http.ResponseWriter, r *http.Request) {
+	if s.Artifacts == nil {
+		fail(w, 503, "artifact_store_unavailable", "artifact storage is not configured")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, artifact.MaxBytes)
+	content, err := io.ReadAll(r.Body)
+	if err != nil {
+		fail(w, 413, "artifact_too_large", "demand artifact exceeds 64 MiB or cannot be read")
+		return
+	}
+	if _, err := artifact.ParseDemandDocument(content); err != nil {
+		fail(w, 422, "invalid_demand_artifact", "expected demand-dataset-v1 with service_calendar and charging_requests")
+		return
+	}
+	manifest, err := s.Artifacts.Put(r.Context(), content)
+	if err != nil {
+		fail(w, 500, "artifact_store_error", "unable to store demand artifact")
+		return
+	}
+	writeJSON(w, 201, manifest)
 }
 
 func (s Server) listScenarios(w http.ResponseWriter, r *http.Request) {

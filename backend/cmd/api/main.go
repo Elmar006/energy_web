@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Elmar006/energy_web/backend/internal/api"
+	"github.com/Elmar006/energy_web/backend/internal/artifact"
 	"github.com/Elmar006/energy_web/backend/internal/store"
 	"github.com/redis/go-redis/v9"
 )
@@ -36,7 +37,11 @@ func main() {
 		cache = redis.NewClient(&redis.Options{Addr: redisAddr})
 		defer cache.Close()
 	}
-	server := &http.Server{Addr: addr, Handler: (api.Server{Store: db, Token: token, Cache: cache, EngineURL: os.Getenv("ENGINE_URL")}).Handler(), ReadHeaderTimeout: 5 * time.Second}
+	var artifacts artifact.Store
+	if root := os.Getenv("ARTIFACT_DIR"); root != "" {
+		artifacts = artifact.Local{Root: root}
+	}
+	server := &http.Server{Addr: addr, Handler: (api.Server{Store: db, Token: token, Cache: cache, EngineURL: os.Getenv("ENGINE_URL"), Artifacts: artifacts}).Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server", "error", err)

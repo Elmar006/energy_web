@@ -10,6 +10,18 @@ from energy.api import CalculationRequest, app
 from energy.run_spec import RunSpec, engine_source_manifest, input_sha256
 
 
+def test_legacy_input_identity_ignores_absent_additive_demand_fields(small_input):
+    snapshot = small_input.model_dump(mode="json")
+    assert snapshot["demand_dataset"] is None
+    assert snapshot["service_calendar"] is None
+    assert snapshot["charging_requests"] == []
+    for name in ("demand_dataset", "service_calendar", "charging_requests"):
+        snapshot.pop(name)
+    canonical = json.dumps(snapshot, ensure_ascii=False, sort_keys=True,
+                           separators=(",", ":")).encode("utf-8")
+    assert input_sha256(small_input) == hashlib.sha256(canonical).hexdigest()
+
+
 def test_defaults_inherit_execution_parameters_without_changing_scenario(small_input):
     small_input.parameters.simulation_days = 7
     original = small_input.model_dump()
@@ -30,7 +42,7 @@ def test_defaults_inherit_execution_parameters_without_changing_scenario(small_i
 
 
 @pytest.mark.parametrize("override", [
-    {"schema_version": "run-spec-v2"}, {"model_version": "future-model"},
+    {"model_version": "future-model"},
     {"simulation_version": "future-simulation"}, {"mode": "accepted"},
     {"mode": "validation"}, {"mode": "validation", "simulation_seeds": list(range(29))},
     {"simulation_seeds": []}, {"simulation_seeds": list(range(101))},
@@ -54,6 +66,13 @@ def test_defaults_inherit_execution_parameters_without_changing_scenario(small_i
     {"mode": "validation", "simulation_seeds": list(range(30)),
      "service_requirements": {"min_energy_fraction": 0.9,
                               "min_seeds_per_condition": 31}},
+    {"development_seeds": [4]},
+    {"schema_version": "run-spec-v2", "development_seeds": [1]},
+    {"schema_version": "run-spec-v2", "max_improvement_iterations": 4},
+    {"schema_version": "run-spec-v2", "development_seeds": [4, 4]},
+    {"schema_version": "run-spec-v2", "mode": "validation",
+     "simulation_seeds": list(range(30)), "development_seeds": [30, 31],
+     "max_improvement_iterations": 1},
 ])
 def test_invalid_run_spec_rejected_by_http_contract(small_input, override):
     response = TestClient(app).post("/v1/calculate", json={
@@ -163,7 +182,10 @@ def test_validation_executes_every_seed_and_propagates_overrides_to_all_stages(s
     # Hash the validated input, as the existing engine contract does. Pydantic
     # normalizes numeric input (including unvalidated model defaults) on ingress.
     normalized_source = CalculationRequest.model_validate({"input": original}).input
-    source_canonical = json.dumps(normalized_source.model_dump(mode="json"), ensure_ascii=False, sort_keys=True,
+    source_snapshot = normalized_source.model_dump(mode="json")
+    for name in ("demand_dataset", "service_calendar", "charging_requests"):
+        source_snapshot.pop(name)
+    source_canonical = json.dumps(source_snapshot, ensure_ascii=False, sort_keys=True,
                                   separators=(",", ":")).encode("utf-8")
     assert metadata["source_input_sha256"] == hashlib.sha256(source_canonical).hexdigest()
     effective = normalized_source.model_copy(deep=True)

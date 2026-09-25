@@ -14,7 +14,7 @@ from energy.contracts import PlanningInput  # noqa: E402
 from energy.corridor import CorridorInput  # noqa: E402
 from energy.fleet import FleetInput  # noqa: E402
 from energy.mobility import ChargingRequest, MobilityInput  # noqa: E402
-from energy.run_spec import RunSpec  # noqa: E402
+from energy.run_spec import RunSpec, RunSpecV2  # noqa: E402
 
 
 def ref(name: str) -> dict:
@@ -39,23 +39,36 @@ mobility = MobilityInput.model_json_schema(ref_template="#/components/schemas/{m
 definitions.update(mobility.pop("$defs", {}))
 charging_request = ChargingRequest.model_json_schema(ref_template="#/components/schemas/{model}")
 definitions.update(charging_request.pop("$defs", {}))
-run_overrides = RunSpec.model_json_schema(ref_template="#/components/schemas/{model}")
-definitions.update(run_overrides.pop("$defs", {}))
-run_overrides["title"] = "RunSpecOverrides"
-run_overrides["description"] = "Optional execution overrides; omitted solver_seconds/simulation_days inherit the saved scenario. Null fields are rejected. Validation mode requires at least 30 distinct seeds. Service requirements, when supplied, gate the simulated operational result only."
-for name in ("solver_seconds", "simulation_days"):
-    run_overrides["properties"][name].pop("default", None)
-run_overrides["properties"]["simulation_seeds"]["uniqueItems"] = True
-run_overrides["properties"]["alternative_service_fractions"]["uniqueItems"] = True
-run_overrides["properties"]["alternative_service_fractions"]["description"] = "Strictly increasing fractions; an empty array disables alternatives."
-run_overrides["properties"]["service_requirements"] = ref("ServiceRequirements")
-run_overrides["allOf"] = [{"if": {"required": ["mode"], "properties": {"mode": {"const": "validation"}}},
-                           "then": {"required": ["simulation_seeds"], "properties": {"simulation_seeds": {"minItems": 30}}}}]
-resolved_run_spec = copy.deepcopy(run_overrides)
-resolved_run_spec["title"] = "RunSpec"
-resolved_run_spec["description"] = "Fully resolved immutable execution controls, persisted when the run is queued."
-resolved_run_spec["required"] = [name for name in resolved_run_spec["properties"]
-                                 if name != "service_requirements"]
+def run_spec_schemas(model, version: str) -> tuple[dict, dict]:
+    overrides = model.model_json_schema(ref_template="#/components/schemas/{model}")
+    definitions.update(overrides.pop("$defs", {}))
+    overrides["title"] = f"RunSpecOverrides{version}"
+    overrides["description"] = ("Optional execution overrides. V2 separates development "
+                                "and final holdout seeds; only holdout simulations count toward acceptance.")
+    for name in ("solver_seconds", "simulation_days"):
+        overrides["properties"][name].pop("default", None)
+    overrides["properties"]["simulation_seeds"]["uniqueItems"] = True
+    overrides["properties"]["alternative_service_fractions"]["uniqueItems"] = True
+    overrides["properties"]["alternative_service_fractions"]["description"] = (
+        "Strictly increasing fractions; an empty array disables alternatives.")
+    overrides["properties"]["service_requirements"] = ref("ServiceRequirements")
+    overrides["allOf"] = [{"if": {"required": ["mode"], "properties": {"mode": {"const": "validation"}}},
+                           "then": {"required": ["simulation_seeds"], "properties": {
+                               "simulation_seeds": {"minItems": 30}}}}]
+    if version == "V2":
+        overrides["required"] = ["schema_version"]
+        overrides["properties"]["development_seeds"]["uniqueItems"] = True
+    resolved = copy.deepcopy(overrides)
+    resolved["title"] = f"RunSpec{version}"
+    resolved["description"] = "Fully resolved immutable execution controls, persisted when queued."
+    resolved["required"] = [name for name in resolved["properties"]
+                            if name not in ("service_requirements", "development_seeds",
+                                            "max_improvement_iterations")]
+    return overrides, resolved
+
+
+run_overrides_v1, resolved_run_spec_v1 = run_spec_schemas(RunSpec, "V1")
+run_overrides_v2, resolved_run_spec_v2 = run_spec_schemas(RunSpecV2, "V2")
 schemas = {
     **definitions,
     "ScenarioSpec": planning,
@@ -63,6 +76,11 @@ schemas = {
     "FleetSpec": fleet,
     "MobilityInput": mobility,
     "ChargingRequest": charging_request,
+    "DemandArtifactDocument": {"type": "object", "additionalProperties": False,
+        "required": ["schema_version", "service_calendar", "charging_requests"],
+        "properties": {"schema_version": {"const": "demand-dataset-v1", "type": "string"},
+                       "service_calendar": ref("ServiceCalendar"),
+                       "charging_requests": {"type": "array", "items": ref("ChargingRequest")}}},
     "MobilityCompileRequest": {"type": "object", "additionalProperties": False,
                                "required": ["input", "mobility"],
                                "properties": {"input": ref("ScenarioSpec"), "mobility": ref("MobilityInput")}},
@@ -130,8 +148,27 @@ schemas = {
                        "compiler_version": {"type": "string"},
                        "compiler_source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
                        "compiler_pydantic_version": {"type": "string"}}},
-    "RunSpec": resolved_run_spec,
-    "RunSpecOverrides": run_overrides,
+    "RunSpecV1": resolved_run_spec_v1,
+    "RunSpecV2": resolved_run_spec_v2,
+    "RunSpec": {"oneOf": [ref("RunSpecV1"), ref("RunSpecV2")]},
+    "RunSpecOverridesV1": run_overrides_v1,
+    "RunSpecOverridesV2": run_overrides_v2,
+    "RunSpecOverrides": {"oneOf": [ref("RunSpecOverridesV1"), ref("RunSpecOverridesV2")]},
+    "ImprovementIteration": {"type": "object", "required": ["iteration"],
+        "properties": {"iteration": {"type": "integer", "minimum": 0, "maximum": 3},
+                       "forced_site_id": {"type": ["string", "null"]},
+                       "optimization_status": {"type": "string"},
+                       "physical_verification_passed": {"type": "boolean"},
+                       "development_score": {"type": ["number", "null"]},
+                       "development": {"type": "object"},
+                       "status": {"type": "string"}, "reason": {"type": "string"},
+                       "selected_for_holdout": {"type": "boolean"}}},
+    "ImprovementTrace": {"type": "object", "required": ["method", "development_seeds",
+        "holdout_seeds_used_for_selection", "iterations"],
+        "properties": {"method": {"type": "string"},
+                       "development_seeds": {"type": "array", "items": {"type": "integer"}},
+                       "holdout_seeds_used_for_selection": {"const": False},
+                       "iterations": {"type": "array", "items": ref("ImprovementIteration")}}},
     "RunRequest": {"type": "object", "additionalProperties": False,
                    "properties": {"run_spec": ref("RunSpecOverrides")}},
     "Error": {"type": "object", "required": ["code", "detail"], "properties": {
@@ -326,13 +363,14 @@ schemas = {
                         **{name: {"type": "string", "pattern": "^[0-9a-f]{64}$"} for name in (
                             "engine_request_sha256", "source_input_sha256", "input_sha256",
                             "scenario_snapshot_sha256", "run_spec_sha256", "execution_sha256",
-                            "engine_source_sha256")},
+                            "engine_source_sha256", "demand_dataset_sha256")},
                         "engine_source_files": {"type": "array", "items": {"type": "string"}},
                         "simulation_seeds": {"type": "array", "items": {"type": "integer"}},
                         "simulation_days": {"type": "integer"}, "solver_seconds": {"type": "integer"}}},
     "PlanResult": {"type": "object", "required": ["optimization", "simulation", "operational_validation", "operational_economics", "explanations", "alternatives", "metadata"],
                    "properties": {"optimization": ref("OptimizationResult"),
                                   "service_acceptance": ref("ServiceAcceptance"),
+                                  "improvement": ref("ImprovementTrace"),
                                   "simulation": {"type": "array", "items": ref("SimulationResult")},
                                   "operational_validation": {"type": "array", "items": ref("OperationalValidation")},
                                   "operational_economics": {"type": "array", "items": ref("OperationalEconomics")},
@@ -434,6 +472,15 @@ document = {
                 "200": response({"type": "array", "items": ref("ScenarioSummary")}), **error_responses}},
             "post": {"summary": "Validate and create immutable scenario", "requestBody": body(spec_create),
                 "responses": {"201": response(ref("SavedScenario")), **error_responses}}},
+        "/api/v1/artifacts/demand": {"post": {
+            "summary": "Upload immutable dated charging demand",
+            "description": "Stores the exact JSON bytes under their SHA-256 content address. The returned DemandDataset manifest can be placed in ScenarioSpec.demand_dataset without inline service_calendar or charging_requests. Go verifies and hydrates it for validation and again before handing a run to the engine. Requires ARTIFACT_DIR shared by API and worker; no arbitrary URLs are accepted.",
+            "requestBody": body(ref("DemandArtifactDocument")),
+            "responses": {"201": response(ref("DemandDataset")),
+                          "413": response(ref("Error"), "Artifact exceeds 64 MiB"),
+                          "422": response(ref("Error"), "Invalid artifact envelope"),
+                          "503": response(ref("Error"), "Artifact storage unavailable"),
+                          **error_responses}}},
         "/api/v1/scenarios/from-datasets/preview": {"post": {
             "summary": "Validate exact imported versions and preview a planning input without saving",
             "requestBody": body(ref("DatasetScenarioRequest")),

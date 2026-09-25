@@ -36,7 +36,8 @@ func TestRunSpecRejectsAmbiguityAndUnboundedWork(t *testing.T) {
 		`{"simulation_seeds":[null]}`, `{"simulation_seeds":[1,1]}`,
 		`{"simulation_seeds":[-1]}`, `{"simulation_seeds":[2147483648]}`,
 		`{"simulation_seeds":[true]}`, `{"simulation_seeds":["1"]}`, `{"simulation_seeds":[1.0]}`,
-		`{"mode":"validation"}`, `{"mode":"unknown"}`, `{"schema_version":"run-spec-v2"}`,
+		`{"mode":"validation"}`, `{"mode":"unknown"}`, `{"schema_version":"run-spec-v3"}`,
+		`{"development_seeds":[1]}`, `{"max_improvement_iterations":0}`,
 		`{"model_version":"new-model"}`, `{"simulation_version":"new-simulator"}`,
 		`{"alternative_service_fractions":null}`, `{"alternative_service_fractions":[null]}`,
 		`{"alternative_service_fractions":[0.5,0.1]}`, `{"alternative_service_fractions":[0.5,0.5]}`,
@@ -52,6 +53,48 @@ func TestRunSpecRejectsAmbiguityAndUnboundedWork(t *testing.T) {
 				t.Fatalf("invalid configuration accepted: %v", err)
 			}
 		})
+	}
+}
+
+func TestRunSpecV2SeparatesDevelopmentAndHoldoutSeeds(t *testing.T) {
+	holdout := make([]int, 30)
+	for i := range holdout {
+		holdout[i] = 100 + i
+	}
+	valid, _ := json.Marshal(map[string]any{
+		"schema_version": "run-spec-v2", "mode": "validation",
+		"simulation_seeds": holdout, "development_seeds": []int{1, 2},
+		"max_improvement_iterations": 3,
+		"service_requirements":       map[string]any{"min_energy_fraction": 0.9},
+	})
+	spec, err := ResolveRunSpec(valid, nil)
+	if err != nil || spec.SchemaVersion != "run-spec-v2" || spec.MaxImprovementIterations != 3 ||
+		!reflect.DeepEqual(spec.DevelopmentSeeds, []int{1, 2}) || !reflect.DeepEqual(spec.SimulationSeeds, holdout) {
+		t.Fatalf("v2 seed split changed: %+v %v", spec, err)
+	}
+	encoded, _ := json.Marshal(spec)
+	replayed, err := ResolveRunSpec(encoded, nil)
+	if err != nil || !reflect.DeepEqual(spec, replayed) {
+		t.Fatalf("v2 persisted snapshot changed: %+v %v", replayed, err)
+	}
+	for _, mutate := range []func(map[string]any){
+		func(v map[string]any) { v["development_seeds"] = []int{100, 1} },
+		func(v map[string]any) { v["development_seeds"] = []int{1, 1} },
+		func(v map[string]any) { v["development_seeds"] = []int{1} },
+		func(v map[string]any) { v["development_seeds"] = []int{} },
+		func(v map[string]any) { v["max_improvement_iterations"] = 4 },
+		func(v map[string]any) { v["mode"] = "exploratory" },
+		func(v map[string]any) { delete(v, "service_requirements") },
+	} {
+		var config map[string]any
+		if err := json.Unmarshal(valid, &config); err != nil {
+			t.Fatal(err)
+		}
+		mutate(config)
+		raw, _ := json.Marshal(config)
+		if _, err := ResolveRunSpec(raw, nil); !errors.Is(err, ErrInvalidRunSpec) {
+			t.Errorf("invalid v2 split accepted: %s %v", raw, err)
+		}
 	}
 }
 

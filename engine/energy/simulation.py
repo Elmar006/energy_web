@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from bisect import bisect_right
 from dataclasses import dataclass
+from datetime import timezone
+import hashlib
+import json
 from statistics import mean
 
 import numpy as np
 import simpy
 
-from .contracts import PlanningInput
+from .contracts import OperationalOutage, PlanningInput
+from .dated import DatedHorizon
 from .dispatch import SiteSupply, dispatch_minute
 
 ENERGY_QUANTILE_PROBABILITIES = np.linspace(0, 1, 101)
@@ -25,19 +30,38 @@ class _Session:
     zone_id: str
     remaining_kwh: float
     done: simpy.Event
+    max_vehicle_kw: float | None = None
+    deadline_minute: float | None = None
     delivered_kwh: float = 0.0
 
 
 def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_id: str,
-             seed: int = 1, grid_upgrades: list[dict] | None = None,
-             battery: list[dict] | None = None, solar: list[dict] | None = None) -> dict:
+              seed: int = 1, grid_upgrades: list[dict] | None = None,
+              battery: list[dict] | None = None, solar: list[dict] | None = None,
+              outages: list[OperationalOutage | dict] | None = None,
+              max_reroutes: int = 1) -> dict:
     params = spec.parameters
     if year not in params.years:
         raise ValueError("unknown planning year")
     scenario = next((s for s in spec.scenarios if s.id == scenario_id), None)
     if scenario is None:
         raise ValueError("unknown scenario")
+    if not 0 <= max_reroutes <= 3:
+        raise ValueError("max_reroutes must be between zero and three")
     period = params.years.index(year)
+    horizon = DatedHorizon.from_calendar(spec.service_calendar) if spec.service_calendar else None
+    day_count = len(spec.service_calendar.covered_dates) if horizon else params.simulation_days
+    day_boundaries = (horizon.day_boundaries_minutes if horizon else
+                      tuple(day * 1440 for day in range(day_count + 1)))
+    hour_count = len(horizon.slot_starts_utc) if horizon else 24 * day_count
+    request_zone_ids = set(spec.service_calendar.request_zone_ids) if horizon else set()
+
+    def local_hour(minute: float) -> int:
+        slot = min(int(minute // 60), hour_count - 1)
+        return horizon.local_hours[slot] if horizon else slot % 24
+
+    def local_day(minute: float) -> int:
+        return min(day_count - 1, bisect_right(day_boundaries, minute) - 1)
     sites = {s.id: s for s in spec.sites}
     options = {o.id: o for o in spec.options}
     nodes = {n.id: n for n in spec.grid_nodes}
@@ -45,6 +69,22 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
     upgraded_nodes = {x["grid_node_id"] for x in (grid_upgrades or [])
                       if x.get("commissioned_year", x["year"]) <= year}
     travel = {(e.zone_id, e.site_id): e.minutes for e in spec.travel_edges}
+    site_travel = {(e.from_site_id, e.to_site_id): e.minutes
+                   for e in spec.site_travel_edges}
+    configured_outages = (spec.operational_outages if outages is None else
+                          [OperationalOutage.model_validate(item) for item in outages])
+    if any(item.site_id not in sites for item in configured_outages):
+        raise ValueError("outage references unknown site")
+    outage_windows = defaultdict(list)
+    for item in configured_outages:
+        outage_windows[item.site_id].append((item.start_minute, item.repair_minute))
+    for windows in outage_windows.values():
+        windows.sort()
+        if any(right[0] < left[1] for left, right in zip(windows, windows[1:])):
+            raise ValueError("outage windows overlap at one site")
+
+    def site_down(site_id: str, minute: float) -> bool:
+        return any(start <= minute < repair for start, repair in outage_windows[site_id])
     supply = {
         sid: SiteSupply(
             node_id=sites[sid].grid_node_id, ports=option.ports,
@@ -66,7 +106,7 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
     refused = defaultdict(int)
     arrivals = defaultdict(int)
     arrivals_by_hour = [0] * 24
-    arrivals_by_day_hour = [[0] * 24 for _ in range(params.simulation_days)]
+    arrivals_by_day_hour = [[0] * 24 for _ in range(day_count)]
     requested_energy_kwh = 0.0
     partial_energy = defaultdict(float)
     energy = defaultdict(float)
@@ -79,7 +119,10 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
     max_soc_violation = 0.0
     max_simultaneous_storage = 0.0
     last_completion = 0.0
-    horizon_minutes = params.simulation_days * 24 * 60
+    rerouted_arrivals = 0
+    rerouted_served = 0
+    outage_station_minutes = defaultdict(int)
+    horizon_minutes = day_boundaries[-1]
     day_dispatch = []
 
     def headroom(node_id: str, hour: int) -> float:
@@ -89,35 +132,59 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
     # Use only the known representative demand profile to schedule grid
     # charging. Otherwise idle batteries would buy power every night, even
     # after the final demand of a simulated day, and falsely depress NPV.
-    forecast = {sid: [0.0] * 24 for sid in supply}
+    forecast = {sid: [0.0] * hour_count for sid in supply}
     for zone in spec.zones:
+        if zone.id in request_zone_ids:
+            continue
         eligible = sorted((minutes, sid) for (zone_id, sid), minutes in travel.items()
                           if zone_id == zone.id and sid in active
                           and minutes <= zone.max_travel_minutes
                           and zone.group in active[sid].allowed_groups)
         if eligible:
             sid = eligible[0][1]
-            for hour, value in enumerate(zone.hourly_kwh):
-                forecast[sid][hour] += value * scenario.demand_multiplier[period]
-    grid_charge_hours = {sid: [False] * (24 * params.simulation_days) for sid in supply}
+            for absolute_hour in range(hour_count):
+                hour = local_hour(absolute_hour * 60)
+                forecast[sid][absolute_hour] += (zone.hourly_kwh[hour] *
+                                                  scenario.demand_multiplier[period])
+    if horizon:
+        for request in spec.charging_requests:
+            zone = next(item for item in spec.zones if item.id == request.zone_id)
+            eligible = sorted((minutes, sid) for (zone_id, sid), minutes in travel.items()
+                              if zone_id == zone.id and sid in active
+                              and minutes <= zone.max_travel_minutes
+                              and zone.group in active[sid].allowed_groups)
+            if not eligible:
+                continue
+            travel_minutes, sid = eligible[0]
+            overlaps = [horizon.overlap_hours(request, h, travel_minutes)
+                        for h in range(hour_count)]
+            total_overlap = sum(overlaps)
+            if total_overlap:
+                weighted = (request.energy_from_charger_kwh * request.population_weight *
+                            scenario.demand_multiplier[period])
+                for h, overlap in enumerate(overlaps):
+                    forecast[sid][h] += weighted * overlap / total_overlap
+    grid_charge_hours = {sid: [False] * hour_count for sid in supply}
     for sid, station in supply.items():
         needed_later = False
-        for absolute_hour in reversed(range(24 * params.simulation_days)):
-            hour = absolute_hour % 24
+        for absolute_hour in reversed(range(hour_count)):
+            hour = local_hour(absolute_hour * 60)
             direct_grid = min(station.connection_kw,
                               headroom(station.node_id, hour) * station.ports
                               / node_ports[station.node_id])
             direct_pv = station.pv_kw * params.pv_hourly_factor[hour] * scenario.pv_multiplier
             direct = min(station.ports * station.charger_kw, direct_grid + direct_pv)
-            needed_later = needed_later or forecast[sid][hour] > direct + 1e-9
+            needed_later = needed_later or forecast[sid][absolute_hour] > direct + 1e-9
             grid_charge_hours[sid][absolute_hour] = needed_later
 
-    def vehicle(zone, arrived: float, requested: float):
+    def vehicle(zone, arrived: float, requested: float, *,
+                deadline_minute: float | None = None,
+                max_vehicle_kw: float | None = None):
         nonlocal last_completion, requested_energy_kwh
         yield env.timeout(max(0, arrived - env.now))
         arrivals[zone.id] += 1
-        arrival_day = min(int(env.now // 1440), params.simulation_days - 1)
-        hour = int(env.now // 60) % 24
+        arrival_day = local_day(env.now)
+        hour = local_hour(env.now)
         arrivals_by_hour[hour] += 1
         arrivals_by_day_hour[arrival_day][hour] += 1
         requested_energy_kwh += requested
@@ -132,7 +199,8 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                           station.soc_kwh * params.storage_efficiency * 60)
             grid = min(option.connection_kw / option.ports,
                        headroom(station.node_id, hour) / node_ports[station.node_id])
-            estimated_power = min(option.charger_kw, grid + (pv + storage) / option.ports)
+            estimated_power = min(option.charger_kw, grid + (pv + storage) / option.ports,
+                                  max_vehicle_kw or option.charger_kw)
             if estimated_power <= 1e-9:
                 continue
             resource = resources[sid]
@@ -143,18 +211,22 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
             return
         _, sid, travel_minutes = min(eligible)
         yield env.timeout(travel_minutes)
-        if env.now >= horizon_minutes:
+        if env.now >= horizon_minutes or (deadline_minute is not None and env.now >= deadline_minute):
             refused[zone.id] += 1
             return
         station = resources[sid]
         queued_at = env.now
         with station.request() as request:
-            response = yield request | env.timeout(min(45, horizon_minutes - env.now))
-            if request not in response or env.now >= horizon_minutes:
+            patience = min(45, horizon_minutes - env.now,
+                           deadline_minute - env.now if deadline_minute is not None else 45)
+            response = yield request | env.timeout(patience)
+            if (request not in response or env.now >= horizon_minutes or
+                    (deadline_minute is not None and env.now >= deadline_minute)):
                 refused[zone.id] += 1
                 return
             waits.append(env.now - queued_at)
-            session = _Session(zone.id, requested, env.event())
+            session = _Session(zone.id, requested, env.event(), max_vehicle_kw,
+                               deadline_minute)
             in_charge[sid].append(session)
             completed = yield session.done
             if completed:
@@ -173,9 +245,14 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
         for minute in range(horizon_minutes):
             if env.now < minute:
                 yield env.timeout(minute - env.now)
-            hour = (minute // 60) % 24
+            hour = local_hour(minute)
             absolute_hour = minute // 60
-            demand = {sid: sum(min(active[sid].charger_kw, session.remaining_kwh * 60)
+            demand = {sid: sum(min(active[sid].charger_kw,
+                                   session.max_vehicle_kw or active[sid].charger_kw,
+                                   session.remaining_kwh * 60,
+                                   (session.max_vehicle_kw or active[sid].charger_kw) *
+                                   min(1, max(0, session.deadline_minute - minute))
+                                   if session.deadline_minute is not None else float("inf"))
                                for session in sessions)
                       for sid, sessions in in_charge.items()}
             node_limits = {node_id: headroom(node_id, hour) for node_id in nodes}
@@ -212,6 +289,10 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                 remaining_power = flow.load_kw
                 for session in in_charge[sid]:
                     delivered = min(session.remaining_kwh * 60, active[sid].charger_kw,
+                                    session.max_vehicle_kw or active[sid].charger_kw,
+                                    (session.max_vehicle_kw or active[sid].charger_kw) *
+                                    min(1, max(0, session.deadline_minute - minute))
+                                    if session.deadline_minute is not None else float("inf"),
                                     remaining_power) / 60
                     session.remaining_kwh = max(0.0, session.remaining_kwh - delivered)
                     session.delivered_kwh += delivered
@@ -222,8 +303,11 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                     if session.remaining_kwh <= 1e-9:
                         sessions.remove(session)
                         session.done.succeed(True)
-            if (minute + 1) % 1440 == 0:
-                day = minute // 1440
+                    elif session.deadline_minute is not None and env.now >= session.deadline_minute:
+                        sessions.remove(session)
+                        session.done.succeed(False)
+            if minute + 1 in day_boundaries[1:]:
+                day = day_boundaries.index(minute + 1) - 1
                 per_site = [{"site_id": sid,
                              **{key: round(value, 4) for key, value in day_totals[sid].items()},
                              "battery_soc_start_kwh": round(day_start_soc[sid], 4),
@@ -240,30 +324,56 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                 session.done.succeed(False)
             sessions.clear()
 
-    for day in range(params.simulation_days):
+    external_arrivals = []
+    for absolute_hour in range(hour_count):
+        hour = local_hour(absolute_hour * 60)
         for zone in spec.zones:
-            for hour, hourly_kwh in enumerate(zone.hourly_kwh):
-                profile = zone.arrival_profile
-                baseline = (profile.hourly_sessions[hour] if profile is not None
-                            else hourly_kwh / zone.mean_session_kwh)
-                expected = baseline * scenario.demand_multiplier[period]
-                if (profile is not None and profile.observation_days >= 7 and profile.sample_count >= 30
-                        and baseline > 0 and profile.hourly_count_variance[hour] > baseline):
-                    # Preserve measured overdispersion; scaling the mean keeps the
-                    # fitted negative-binomial dispersion constant across scenarios.
-                    shape = baseline * baseline / (profile.hourly_count_variance[hour] - baseline)
-                    count = rng.negative_binomial(shape, shape / (shape + expected)) if expected > 0 else 0
+            if zone.id in request_zone_ids:
+                continue
+            hourly_kwh = zone.hourly_kwh[hour]
+            profile = zone.arrival_profile
+            baseline = (profile.hourly_sessions[hour] if profile is not None
+                        else hourly_kwh / zone.mean_session_kwh)
+            expected = baseline * scenario.demand_multiplier[period]
+            if (profile is not None and profile.observation_days >= 7 and profile.sample_count >= 30
+                    and baseline > 0 and profile.hourly_count_variance[hour] > baseline):
+                # Preserve measured overdispersion; scaling the mean keeps the
+                # fitted negative-binomial dispersion constant across scenarios.
+                shape = baseline * baseline / (profile.hourly_count_variance[hour] - baseline)
+                count = rng.negative_binomial(shape, shape / (shape + expected)) if expected > 0 else 0
+            else:
+                count = rng.poisson(expected)
+            for _ in range(count):
+                arrival = absolute_hour * 60 + rng.uniform(0, 60)
+                if profile is not None:
+                    requested = float(np.interp(rng.random(), ENERGY_QUANTILE_PROBABILITIES,
+                                                profile.energy_quantiles_kwh))
                 else:
-                    count = rng.poisson(expected)
-                for _ in range(count):
-                    arrival = day * 1440 + hour * 60 + rng.uniform(0, 60)
-                    if profile is not None:
-                        requested = float(np.interp(rng.random(), ENERGY_QUANTILE_PROBABILITIES,
-                                                    profile.energy_quantiles_kwh))
-                    else:
-                        # Positive parametric fallback with exactly the stated mean.
-                        requested = float(rng.gamma(1 / 0.15**2, zone.mean_session_kwh * 0.15**2))
-                    env.process(vehicle(zone, arrival, requested))
+                    # Positive parametric fallback with exactly the stated mean.
+                    requested = float(rng.gamma(1 / 0.15**2, zone.mean_session_kwh * 0.15**2))
+                external_arrivals.append((zone.id, round(arrival, 6), round(requested, 6), None))
+                env.process(vehicle(zone, arrival, requested))
+    if horizon:
+        zones = {zone.id: zone for zone in spec.zones}
+        for request in spec.charging_requests:
+            expected_count = request.population_weight * scenario.demand_multiplier[period]
+            whole = int(expected_count)
+            count = whole + int(rng.random() < expected_count - whole)
+            arrival = ((request.arrival_at.astimezone(timezone.utc) - horizon.start_utc)
+                       .total_seconds() / 60)
+            deadline = ((request.deadline_at.astimezone(timezone.utc) - horizon.start_utc)
+                        .total_seconds() / 60)
+            for _ in range(count):
+                external_arrivals.append((request.zone_id, round(arrival, 6),
+                                          round(request.energy_from_charger_kwh, 6),
+                                          round(deadline, 6)))
+                env.process(vehicle(zones[request.zone_id], arrival,
+                                    request.energy_from_charger_kwh,
+                                    deadline_minute=deadline,
+                                    max_vehicle_kw=request.max_vehicle_kw))
+    arrival_stream_sha256 = hashlib.sha256(json.dumps(
+        sorted(external_arrivals), separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
     env.process(dispatcher())
     env.run()
     total_energy = sum(energy.values()) + sum(partial_energy.values())
@@ -290,7 +400,11 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                      for sid in sorted(supply)]
     return {
         "year": year, "scenario_id": scenario_id, "seed": seed,
-        "simulation_days": params.simulation_days,
+        "simulation_days": day_count,
+        "demand_basis": "dated_requests" if horizon else "representative_day",
+        "calendar_covered_dates": ([day.isoformat() for day in spec.service_calendar.covered_dates]
+                                   if horizon else None),
+        "arrival_stream_sha256": arrival_stream_sha256,
         "arrivals": sum(arrivals.values()), "served_sessions": sum(served.values()),
         "refused_sessions": sum(refused.values()),
         "arrivals_by_hour": arrivals_by_hour,
@@ -316,5 +430,7 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                         "PV serves vehicles before charging batteries; grid fills demand before batteries discharge",
                         "spare PV and then spare grid charge batteries; grid sharing is max-min fair",
                         "grid charging of storage is enabled only before forecast hours with direct-supply shortfall",
-                        "the same representative-day demand profile repeats independently each day; no day-of-week, seasonal or AC power-flow validation"],
+                        ("dated request arrivals/deadlines are replayed; fractional population weights and demand multipliers use seeded stochastic rounding; explicitly marked legacy zones repeat their profile"
+                         if horizon else
+                         "the same representative-day demand profile repeats independently each day; no day-of-week, seasonal or AC power-flow validation")],
     }

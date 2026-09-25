@@ -79,3 +79,37 @@ def test_multiday_energy_and_economics_are_normalized_to_a_day(small_input):
     assert multi.pop("simulation_days") == 2
     assert single == multi
     assert compare_economics(small_input, optimization, [one]) == compare_economics(small_input, optimization, [two])
+def test_dated_economics_uses_explicit_horizon_factor_not_365_per_day(small_input):
+    from energy.contracts import PlanningInput
+    from energy.optimizer import SolveResult
+    from energy.validation import compare_economics
+
+    raw = small_input.model_dump(mode="json")
+    raw["time_zone"] = "Europe/Moscow"
+    raw["service_calendar"] = {
+        "time_zone": "Europe/Moscow", "covered_dates": ["2027-05-03"],
+        "request_zone_ids": ["z1"], "legacy_profile_zone_ids": [],
+        "annualization_factor": 10,
+    }
+    raw["charging_requests"] = [{
+        "request_id": "r1", "vehicle_id": "v1", "segment": "private",
+        "zone_id": "z1", "arrival_at": "2027-05-03T12:00:00+03:00",
+        "deadline_at": "2027-05-03T13:00:00+03:00",
+        "energy_from_charger_kwh": 10, "battery_kwh": 50,
+        "soc_before_kwh": 20, "max_vehicle_kw": 10,
+        "charging_efficiency": 0.9, "population_weight": 1,
+        "provenance": {"source": "test itinerary", "kind": "assumed"},
+    }]
+    spec = PlanningInput.model_validate(raw)
+    result = SolveResult(status="optimal", objective=0, gap=0,
+                         selected=[{"site_id": "s1", "option_id": "dc", "year": 2027}],
+                         grid_upgrades=[], battery=[], solar=[],
+                         served_kwh={"base": 10}, unmet_kwh={"base": 0},
+                         cashflow_rub={"base": 1500})
+    simulation = [{"scenario_id": "base", "year": 2027, "seed": 1,
+                   "simulation_days": 1, "energy_kwh": 10,
+                   "dispatch_by_site": [{"grid_kwh": 10, "battery_discharge_kwh": 0}]}]
+    summary = compare_economics(spec, result, simulation)
+    assert summary[0]["simulated_npv_rub_mean"] == 1500
+    assert summary[0]["annualization_basis"] == "assumed_repeat_dated_horizon"
+    assert summary[0]["annualization_factor"] == 10

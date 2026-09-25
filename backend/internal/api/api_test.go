@@ -8,7 +8,47 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Elmar006/energy_web/backend/internal/artifact"
 )
+
+func TestDemandArtifactUploadRequiresAuthAndReturnsContentAddress(t *testing.T) {
+	const data = `{"schema_version":"demand-dataset-v1","service_calendar":{"schema_version":"service-calendar-v1","time_zone":"Europe/Moscow","covered_dates":["2027-05-03"],"request_zone_ids":["z1"],"legacy_profile_zone_ids":[],"annualization_factor":365,"annualization_basis":"assumed_repeat","days":[{"date":"2027-05-03","day_type":"weekday","season":"spring"}]},"charging_requests":[]}`
+	local := artifact.Local{Root: t.TempDir()}
+	handler := (Server{Token: "test-secret-token", Artifacts: local}).Handler()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/artifacts/demand", strings.NewReader(data))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous artifact upload succeeded: %d", response.Code)
+	}
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/artifacts/demand", strings.NewReader(data))
+	request.Header.Set("Authorization", "Bearer test-secret-token")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("artifact upload failed: %d %s", response.Code, response.Body.String())
+	}
+	var m artifact.Manifest
+	if json.Unmarshal(response.Body.Bytes(), &m) != nil || m.Validate() != nil {
+		t.Fatalf("invalid manifest: %s", response.Body.String())
+	}
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/artifacts/demand", strings.NewReader(data))
+	request.Header.Set("Authorization", "Bearer test-secret-token")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	var repeated artifact.Manifest
+	if response.Code != http.StatusCreated || json.Unmarshal(response.Body.Bytes(), &repeated) != nil || repeated != m {
+		t.Fatalf("identical upload changed address: %d %s", response.Code, response.Body.String())
+	}
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/artifacts/demand", strings.NewReader(`{"schema_version":"demand-dataset-v1","service_calendar":{},"charging_requests":null}`))
+	request.Header.Set("Authorization", "Bearer test-secret-token")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid artifact envelope accepted: %d", response.Code)
+	}
+}
 
 func TestScenarioValidationRejectsBrokenPlanningInputBeforeDatabase(t *testing.T) {
 	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
