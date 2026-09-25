@@ -25,7 +25,7 @@ func (q Queries) GetScenario(ctx context.Context, id string) (Scenario, error) {
 // cancellation and result publication atomic with their corresponding events.
 type RunRepository interface {
 	QueryRepository
-	CreateRun(context.Context, string, string) (Run, error)
+	CreateRun(context.Context, string, string, ...RunSpec) (Run, error)
 	GetRun(context.Context, string) (Run, error)
 	Cancel(context.Context, string) (bool, error)
 	Result(context.Context, string) (json.RawMessage, error)
@@ -34,14 +34,26 @@ type RunRepository interface {
 
 type Runs struct{ Repository RunRepository }
 
-func (s Runs) Start(ctx context.Context, scenarioID, key string) (Run, error) {
+func (s Runs) Start(ctx context.Context, scenarioID, key string, rawSpec ...json.RawMessage) (Run, error) {
 	if len(key) < 8 || len(key) > 128 {
 		return Run{}, ErrInvalidKey
 	}
-	if _, err := s.Repository.GetScenario(ctx, scenarioID); err != nil {
+	scenario, err := s.Repository.GetScenario(ctx, scenarioID)
+	if err != nil {
 		return Run{}, err
 	}
-	return s.Repository.CreateRun(ctx, scenarioID, key)
+	if len(rawSpec) > 1 {
+		return Run{}, invalidRunSpec("one configuration required")
+	}
+	var raw json.RawMessage
+	if len(rawSpec) == 1 {
+		raw = rawSpec[0]
+	}
+	spec, err := ResolveRunSpec(raw, scenario.Spec)
+	if err != nil {
+		return Run{}, err
+	}
+	return s.Repository.CreateRun(ctx, scenarioID, key, spec)
 }
 
 func (s Runs) Get(ctx context.Context, id string) (Run, error) {

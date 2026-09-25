@@ -20,7 +20,7 @@ func (r *runRepositoryStub) GetScenario(context.Context, string) (Scenario, erro
 	r.lookupCalls++
 	return Scenario{ID: "scenario"}, r.lookupErr
 }
-func (r *runRepositoryStub) CreateRun(context.Context, string, string) (Run, error) {
+func (r *runRepositoryStub) CreateRun(context.Context, string, string, ...RunSpec) (Run, error) {
 	r.createCalls++
 	return Run{ID: "run"}, r.createErr
 }

@@ -19,11 +19,7 @@ type Scenario = planning.Scenario
 type ScenarioSummary = planning.ScenarioSummary
 type Run = planning.Run
 
-type Job struct {
-	RunID     string
-	AttemptID string
-	Spec      json.RawMessage
-}
+type Job = planning.Job
 
 type Event = planning.Event
 
@@ -88,21 +84,80 @@ func (s *Store) ListScenarios(ctx context.Context) ([]ScenarioSummary, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) CreateRun(ctx context.Context, scenarioID, key string) (Run, error) {
-	var id string
-	err := s.DB.QueryRow(ctx, `INSERT INTO runs(id,scenario_id,idempotency_key,state)
-        VALUES(gen_random_uuid(),$1::uuid,$2,'queued') ON CONFLICT (scenario_id,idempotency_key)
-        DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key RETURNING id::text`, scenarioID, key).Scan(&id)
+const runColumns = `id::text,scenario_id::text,state,attempts,error_code,error_detail,created_at,updated_at,
+    run_spec,scenario_sha256,run_spec_sha256,execution_sha256,run_spec_origin`
+
+func scanRun(row pgx.Row) (Run, error) {
+	var r Run
+	err := row.Scan(&r.ID, &r.ScenarioID, &r.State, &r.Attempts, &r.ErrorCode, &r.ErrorDetail,
+		&r.CreatedAt, &r.UpdatedAt, &r.RunSpec, &r.ScenarioSHA256, &r.RunSpecSHA256, &r.ExecutionSHA256, &r.RunSpecOrigin)
+	return r, err
+}
+
+// CreateRun freezes the complete execution configuration before a worker can
+// claim the job. Reusing a key is valid only for exactly the same resolved
+// configuration, including under concurrent inserts.
+func (s *Store) CreateRun(ctx context.Context, scenarioID, key string, specs ...planning.RunSpec) (Run, error) {
+	if len(specs) > 1 {
+		return Run{}, errors.New("at most one run specification is supported")
+	}
+	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return Run{}, err
 	}
-	return s.GetRun(ctx, id)
+	defer tx.Rollback(ctx)
+	var scenario json.RawMessage
+	var scenarioSHA string
+	err = tx.QueryRow(ctx, `SELECT spec,spec_sha256 FROM scenarios WHERE id=$1::uuid FOR SHARE`, scenarioID).Scan(&scenario, &scenarioSHA)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Run{}, ErrNotFound
+	}
+	if err != nil {
+		return Run{}, err
+	}
+	var raw json.RawMessage
+	if len(specs) == 1 {
+		raw, err = json.Marshal(specs[0])
+		if err != nil {
+			return Run{}, err
+		}
+	}
+	resolved, err := planning.ResolveRunSpec(raw, scenario)
+	if err != nil {
+		return Run{}, err
+	}
+	raw, err = json.Marshal(resolved)
+	if err != nil {
+		return Run{}, err
+	}
+	var normalized json.RawMessage
+	if err := tx.QueryRow(ctx, `SELECT $1::jsonb`, raw).Scan(&normalized); err != nil {
+		return Run{}, err
+	}
+	specSum := sha256.Sum256(normalized)
+	specSHA := hex.EncodeToString(specSum[:])
+	executionSum := sha256.Sum256([]byte(scenarioSHA + "\n" + specSHA))
+	executionSHA := hex.EncodeToString(executionSum[:])
+	r, err := scanRun(tx.QueryRow(ctx, `INSERT INTO runs(id,scenario_id,idempotency_key,state,
+            run_spec,scenario_sha256,run_spec_sha256,execution_sha256,run_spec_origin)
+        VALUES(gen_random_uuid(),$1::uuid,$2,'queued',$3,$4,$5,$6,'resolved')
+        ON CONFLICT (scenario_id,idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
+        WHERE runs.run_spec_sha256=EXCLUDED.run_spec_sha256 AND runs.execution_sha256=EXCLUDED.execution_sha256
+        RETURNING `+runColumns, scenarioID, key, normalized, scenarioSHA, specSHA, executionSHA))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Run{}, planning.ErrRunSpecConflict
+	}
+	if err != nil {
+		return Run{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Run{}, err
+	}
+	return r, nil
 }
 
 func (s *Store) GetRun(ctx context.Context, id string) (Run, error) {
-	var r Run
-	err := s.DB.QueryRow(ctx, `SELECT id::text,scenario_id::text,state,attempts,error_code,error_detail,created_at,updated_at
-        FROM runs WHERE id=$1::uuid`, id).Scan(&r.ID, &r.ScenarioID, &r.State, &r.Attempts, &r.ErrorCode, &r.ErrorDetail, &r.CreatedAt, &r.UpdatedAt)
+	r, err := scanRun(s.DB.QueryRow(ctx, `SELECT `+runColumns+` FROM runs WHERE id=$1::uuid`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, ErrNotFound
 	}
@@ -152,7 +207,8 @@ func (s *Store) Claim(ctx context.Context) (*Job, error) {
     ) UPDATE runs r SET state='running',attempt_id=gen_random_uuid(),attempts=attempts+1,
         lease_until=now()+interval '30 seconds',updated_at=now(),error_code=NULL,error_detail=NULL
         FROM next,scenarios sc WHERE r.id=next.id AND sc.id=r.scenario_id
-        RETURNING r.id::text,r.attempt_id::text,sc.spec`).Scan(&job.RunID, &job.AttemptID, &job.Spec)
+        RETURNING r.id::text,r.attempt_id::text,sc.spec,r.run_spec,r.scenario_sha256,r.run_spec_sha256,r.execution_sha256`).Scan(
+		&job.RunID, &job.AttemptID, &job.Spec, &job.RunSpec, &job.ScenarioSHA256, &job.RunSpecSHA256, &job.ExecutionSHA256)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

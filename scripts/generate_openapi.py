@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import sys
 from pathlib import Path
 
@@ -12,6 +13,7 @@ sys.path.insert(0, str(ROOT / "engine"))
 from energy.contracts import PlanningInput  # noqa: E402
 from energy.corridor import CorridorInput  # noqa: E402
 from energy.fleet import FleetInput  # noqa: E402
+from energy.run_spec import RunSpec  # noqa: E402
 
 
 def ref(name: str) -> dict:
@@ -32,11 +34,29 @@ corridor = CorridorInput.model_json_schema(ref_template="#/components/schemas/{m
 definitions.update(corridor.pop("$defs"))
 fleet = FleetInput.model_json_schema(ref_template="#/components/schemas/{model}")
 definitions.update(fleet.pop("$defs"))
+run_overrides = RunSpec.model_json_schema(ref_template="#/components/schemas/{model}")
+run_overrides["title"] = "RunSpecOverrides"
+run_overrides["description"] = "Optional execution overrides; omitted solver_seconds/simulation_days inherit the saved scenario. Null fields are rejected. Validation mode requires at least 30 distinct seeds; it does not certify service quality."
+for name in ("solver_seconds", "simulation_days"):
+    run_overrides["properties"][name].pop("default", None)
+run_overrides["properties"]["simulation_seeds"]["uniqueItems"] = True
+run_overrides["properties"]["alternative_service_fractions"]["uniqueItems"] = True
+run_overrides["properties"]["alternative_service_fractions"]["description"] = "Strictly increasing fractions; an empty array disables alternatives."
+run_overrides["allOf"] = [{"if": {"required": ["mode"], "properties": {"mode": {"const": "validation"}}},
+                           "then": {"required": ["simulation_seeds"], "properties": {"simulation_seeds": {"minItems": 30}}}}]
+resolved_run_spec = copy.deepcopy(run_overrides)
+resolved_run_spec["title"] = "RunSpec"
+resolved_run_spec["description"] = "Fully resolved immutable execution controls, persisted when the run is queued."
+resolved_run_spec["required"] = list(resolved_run_spec["properties"])
 schemas = {
     **definitions,
     "ScenarioSpec": planning,
     "CorridorSpec": corridor,
     "FleetSpec": fleet,
+    "RunSpec": resolved_run_spec,
+    "RunSpecOverrides": run_overrides,
+    "RunRequest": {"type": "object", "additionalProperties": False,
+                   "properties": {"run_spec": ref("RunSpecOverrides")}},
     "Error": {"type": "object", "required": ["code", "detail"], "properties": {
         "code": {"type": "string"}, "detail": {"type": "string"}}},
     "SavedScenario": {"type": "object", "required": ["id", "name", "spec"], "properties": {
@@ -45,11 +65,17 @@ schemas = {
     "ScenarioSummary": {"type": "object", "required": ["id", "name", "sha256", "created_at"], "properties": {
         "id": {"type": "string", "format": "uuid"}, "name": {"type": "string"},
         "sha256": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}}},
-    "Run": {"type": "object", "required": ["id", "state"], "properties": {
+    "Run": {"type": "object", "required": ["id", "state", "run_spec", "run_spec_sha256", "scenario_sha256", "execution_sha256", "run_spec_origin"], "properties": {
         "id": {"type": "string", "format": "uuid"}, "scenario_id": {"type": "string", "format": "uuid"},
         "state": {"type": "string", "enum": ["queued", "running", "succeeded", "failed", "cancelled"]},
         "attempts": {"type": "integer"}, "error_code": {"type": ["string", "null"]},
-        "error_detail": {"type": ["string", "null"]}}},
+        "error_detail": {"type": ["string", "null"]},
+        "run_spec": ref("RunSpec"),
+        "run_spec_origin": {"type": "string", "enum": ["resolved", "legacy_inferred"]},
+        **{name: {"type": "string", "pattern": "^[0-9a-f]{64}$"} for name in
+           ("run_spec_sha256", "scenario_sha256", "execution_sha256")},
+        "created_at": {"type": "string", "format": "date-time"},
+        "updated_at": {"type": "string", "format": "date-time"}}},
     "RiskMetrics": {"type": "object", "properties": {
         "cvar_alpha": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
         "cvar_loss_rub": {"type": "number", "minimum": 0},
@@ -206,14 +232,28 @@ schemas = {
                        "simulation": {"type": "array", "items": ref("SimulationResult")},
                        "operational_validation": {"type": "array", "items": ref("OperationalValidation")},
                        "operational_economics": {"type": "array", "items": ref("OperationalEconomics")}}},
+    "RunMetadata": {"type": "object", "description": "Current calculations include these fields; historical results may omit them.",
+                    "properties": {
+                        "run_spec": {"oneOf": [ref("RunSpec"), {"type": "null"}]},
+                        "configuration_source": {"type": "string", "enum": ["run_spec", "legacy_fields"]},
+                        **{name: {"type": "string", "pattern": "^[0-9a-f]{64}$"} for name in (
+                            "engine_request_sha256", "source_input_sha256", "input_sha256",
+                            "scenario_snapshot_sha256", "run_spec_sha256", "execution_sha256",
+                            "engine_source_sha256")},
+                        "engine_source_files": {"type": "array", "items": {"type": "string"}},
+                        "simulation_seeds": {"type": "array", "items": {"type": "integer"}},
+                        "simulation_days": {"type": "integer"}, "solver_seconds": {"type": "integer"}}},
     "PlanResult": {"type": "object", "required": ["optimization", "simulation", "operational_validation", "operational_economics", "explanations", "alternatives", "metadata"],
                    "properties": {"optimization": ref("OptimizationResult"),
+                                  "service_acceptance": {"type": "object", "required": ["status", "reason"],
+                                      "description": "Absent in legacy stored results. No formal operational acceptance is implemented in this version.",
+                                      "properties": {"status": {"const": "not_evaluated"}, "reason": {"const": "service_requirements_not_configured"}}},
                                   "simulation": {"type": "array", "items": ref("SimulationResult")},
                                   "operational_validation": {"type": "array", "items": ref("OperationalValidation")},
                                   "operational_economics": {"type": "array", "items": ref("OperationalEconomics")},
                                   "explanations": {"type": "array", "items": {"type": "object"}},
                                   "alternatives": {"type": "array", "items": ref("AlternativePlan")},
-                                  "metadata": {"type": "object"}}},
+                                  "metadata": ref("RunMetadata")}},
     "DatasetManifest": {"type": "object", "required": ["id", "name", "kind", "source", "checksum", "created_at", "format"],
                         "properties": {"id": {"type": "string", "format": "uuid"},
                                        "name": {"type": "string"}, "kind": {"type": "string", "enum": ["observed", "derived", "assumed"]},
@@ -336,9 +376,13 @@ document = {
                           "404": response(ref("Error")), "413": response(ref("Error")),
                           "503": response(ref("Error")), **error_responses}}},
         "/api/v1/scenarios/{id}/runs": {"post": {"summary": "Queue idempotent calculation",
+            "description": "An empty body or {} keeps legacy defaults. The resolved RunSpec is stored with the run. Reusing the key with different resolved parameters returns 409.",
+            "requestBody": {"required": False, "content": {"application/json": {"schema": ref("RunRequest")}}},
             "parameters": [uuid_param, {"name": "Idempotency-Key", "in": "header", "required": True,
                                        "schema": {"type": "string", "minLength": 8, "maxLength": 128}}],
-            "responses": {"202": response(ref("Run")), "404": response(ref("Error")), **error_responses}}},
+            "responses": {"202": response(ref("Run")), "400": response(ref("Error")), "404": response(ref("Error")),
+                          "409": response(ref("Error"), "Idempotency key already used with different parameters"),
+                          "413": response(ref("Error"), "Request exceeds 16 KiB"), **error_responses}}},
         "/api/v1/runs/{id}": {"get": {"summary": "Get run state", "parameters": [uuid_param],
             "responses": {"200": response(ref("Run")), "404": response(ref("Error")), **error_responses}}},
         "/api/v1/runs/{id}/cancel": {"post": {"summary": "Cancel queued or running run", "parameters": [uuid_param],
