@@ -22,6 +22,7 @@ def test_defaults_inherit_execution_parameters_without_changing_scenario(small_i
         "simulation_seeds": [1, 2, 3], "explain_top_n": 3,
         "alternative_service_fractions": [0.0, 0.5, 1.0],
         "alternative_solver_seconds": 20, "solver_seconds": 15, "simulation_days": 7,
+        "service_requirements": None,
     }
     effective = resolved.apply(small_input)
     effective.zones[0].hourly_kwh[0] = 99
@@ -50,6 +51,9 @@ def test_defaults_inherit_execution_parameters_without_changing_scenario(small_i
     {"alternative_service_fractions": ["0.5"]},
     {"alternative_service_fractions": [0, 0.1, 0.2, 0.3, 0.4, 0.5]},
     {"alternative_service_fractions": None}, {"typo": 30},
+    {"mode": "validation", "simulation_seeds": list(range(30)),
+     "service_requirements": {"min_energy_fraction": 0.9,
+                              "min_seeds_per_condition": 31}},
 ])
 def test_invalid_run_spec_rejected_by_http_contract(small_input, override):
     response = TestClient(app).post("/v1/calculate", json={

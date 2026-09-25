@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "engine"))
 from energy.contracts import PlanningInput  # noqa: E402
 from energy.corridor import CorridorInput  # noqa: E402
 from energy.fleet import FleetInput  # noqa: E402
+from energy.mobility import ChargingRequest, MobilityInput  # noqa: E402
 from energy.run_spec import RunSpec  # noqa: E402
 
 
@@ -34,25 +35,101 @@ corridor = CorridorInput.model_json_schema(ref_template="#/components/schemas/{m
 definitions.update(corridor.pop("$defs"))
 fleet = FleetInput.model_json_schema(ref_template="#/components/schemas/{model}")
 definitions.update(fleet.pop("$defs"))
+mobility = MobilityInput.model_json_schema(ref_template="#/components/schemas/{model}")
+definitions.update(mobility.pop("$defs", {}))
+charging_request = ChargingRequest.model_json_schema(ref_template="#/components/schemas/{model}")
+definitions.update(charging_request.pop("$defs", {}))
 run_overrides = RunSpec.model_json_schema(ref_template="#/components/schemas/{model}")
+definitions.update(run_overrides.pop("$defs", {}))
 run_overrides["title"] = "RunSpecOverrides"
-run_overrides["description"] = "Optional execution overrides; omitted solver_seconds/simulation_days inherit the saved scenario. Null fields are rejected. Validation mode requires at least 30 distinct seeds; it does not certify service quality."
+run_overrides["description"] = "Optional execution overrides; omitted solver_seconds/simulation_days inherit the saved scenario. Null fields are rejected. Validation mode requires at least 30 distinct seeds. Service requirements, when supplied, gate the simulated operational result only."
 for name in ("solver_seconds", "simulation_days"):
     run_overrides["properties"][name].pop("default", None)
 run_overrides["properties"]["simulation_seeds"]["uniqueItems"] = True
 run_overrides["properties"]["alternative_service_fractions"]["uniqueItems"] = True
 run_overrides["properties"]["alternative_service_fractions"]["description"] = "Strictly increasing fractions; an empty array disables alternatives."
+run_overrides["properties"]["service_requirements"] = ref("ServiceRequirements")
 run_overrides["allOf"] = [{"if": {"required": ["mode"], "properties": {"mode": {"const": "validation"}}},
                            "then": {"required": ["simulation_seeds"], "properties": {"simulation_seeds": {"minItems": 30}}}}]
 resolved_run_spec = copy.deepcopy(run_overrides)
 resolved_run_spec["title"] = "RunSpec"
 resolved_run_spec["description"] = "Fully resolved immutable execution controls, persisted when the run is queued."
-resolved_run_spec["required"] = list(resolved_run_spec["properties"])
+resolved_run_spec["required"] = [name for name in resolved_run_spec["properties"]
+                                 if name != "service_requirements"]
 schemas = {
     **definitions,
     "ScenarioSpec": planning,
     "CorridorSpec": corridor,
     "FleetSpec": fleet,
+    "MobilityInput": mobility,
+    "ChargingRequest": charging_request,
+    "MobilityCompileRequest": {"type": "object", "additionalProperties": False,
+                               "required": ["input", "mobility"],
+                               "properties": {"input": ref("ScenarioSpec"), "mobility": ref("MobilityInput")}},
+    "MobilityCreateRequest": {"type": "object", "additionalProperties": False,
+                              "required": ["name", "input", "mobility"],
+                              "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 120},
+                                             "input": ref("ScenarioSpec"), "mobility": ref("MobilityInput")}},
+    "MobilityCalendarProfile": {"type": "object", "additionalProperties": False,
+        "required": ["date", "day_type", "season", "physical_hours", "zone_hourly_kwh"],
+        "properties": {"date": {"type": "string", "format": "date"},
+                       "day_type": {"type": "string", "enum": ["weekday", "weekend"]},
+                       "season": {"type": "string", "enum": ["winter", "spring", "summer", "autumn"]},
+                       "physical_hours": {"type": "number", "minimum": 0},
+                       "zone_hourly_kwh": {"type": "object", "description": "Sparse map; absent zone means zero requests on this covered date.", "additionalProperties": {
+                           "type": "array", "minItems": 24, "maxItems": 24,
+                           "items": {"type": "number", "minimum": 0}}}}},
+    "MobilityVehicleAudit": {"type": "object", "additionalProperties": False,
+        "required": ["vehicle_id", "population_weight_basis", "initial_kwh", "driving_kwh", "private_metered_kwh",
+                     "public_requested_metered_kwh", "weighted_public_requested_kwh",
+                     "population_weight", "projected_final_kwh", "balance_error_kwh"],
+        "properties": {"vehicle_id": {"type": "string"},
+                       "population_weight_basis": {"type": ["string", "null"]},
+                       **{name: {"type": "number"} for name in (
+                           "initial_kwh", "driving_kwh", "private_metered_kwh",
+                           "public_requested_metered_kwh", "weighted_public_requested_kwh",
+                           "population_weight", "projected_final_kwh", "balance_error_kwh")}}},
+    "MobilityAudit": {"type": "object", "additionalProperties": False,
+        "required": ["vehicles", "request_count", "population_weighted_public_kwh",
+                     "covered_dates", "source_kind", "projection"],
+        "properties": {"vehicles": {"type": "array", "items": ref("MobilityVehicleAudit")},
+                       "request_count": {"type": "integer", "minimum": 0},
+                       "population_weighted_public_kwh": {"type": "number", "minimum": 0},
+                       "covered_dates": {"type": "integer", "minimum": 1},
+                       "source_kind": {"type": "string", "enum": ["observed", "assumed"]},
+                       "projection": {"type": "string"}}},
+    "PreparedMobilityScenario": {"type": "object", "additionalProperties": False,
+        "required": ["spec", "requests", "calendar_profiles", "audit", "source_sha256",
+                     "source_canonical_json", "compiler_source_sha256", "compiler_pydantic_version"],
+        "properties": {"spec": ref("ScenarioSpec"),
+                       "requests": {"type": "array", "items": ref("ChargingRequest")},
+                       "calendar_profiles": {"type": "array", "items": ref("MobilityCalendarProfile")},
+                       "audit": ref("MobilityAudit"),
+                       "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                       "source_canonical_json": {"type": "string", "description": "Normalized mobility-v1 JSON exactly hashed by source_sha256; archive with the scenario for reproducibility."},
+                       "compiler_source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                       "compiler_pydantic_version": {"type": "string"}}},
+    "SavedMobilityScenario": {"type": "object", "additionalProperties": False,
+        "required": ["scenario", "dataset_version_id", "source_sha256", "base_sha256", "source_access_token"],
+        "properties": {"scenario": ref("SavedScenario"),
+                       "dataset_version_id": {"type": "string", "format": "uuid"},
+                       "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                       "base_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                       "source_access_token": {"type": "string", "pattern": "^[0-9a-f]{64}$",
+                                               "description": "Returned once. Retain securely; required with API bearer token to retrieve the original itinerary."}}},
+    "MobilityOrigin": {"type": "object", "additionalProperties": False,
+        "required": ["scenario_id", "dataset_version_id", "base_input", "base_sha256",
+                     "source_canonical_json", "source_sha256", "compiler_version",
+                     "compiler_source_sha256", "compiler_pydantic_version"],
+        "properties": {"scenario_id": {"type": "string", "format": "uuid"},
+                       "dataset_version_id": {"type": "string", "format": "uuid"},
+                       "base_input": ref("ScenarioSpec"),
+                       "base_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                       "source_canonical_json": {"type": "string"},
+                       "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                       "compiler_version": {"type": "string"},
+                       "compiler_source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                       "compiler_pydantic_version": {"type": "string"}}},
     "RunSpec": resolved_run_spec,
     "RunSpecOverrides": run_overrides,
     "RunRequest": {"type": "object", "additionalProperties": False,
@@ -231,7 +308,17 @@ schemas = {
                        "optimization": ref("OptimizationResult"),
                        "simulation": {"type": "array", "items": ref("SimulationResult")},
                        "operational_validation": {"type": "array", "items": ref("OperationalValidation")},
-                       "operational_economics": {"type": "array", "items": ref("OperationalEconomics")}}},
+                       "operational_economics": {"type": "array", "items": ref("OperationalEconomics")},
+                       "service_acceptance": ref("ServiceAcceptance")}},
+    "ServiceAcceptance": {"type": "object", "required": ["status", "reason"],
+                          "description": "Assessment of simulated streams, not external validation of assumptions.",
+                          "properties": {"status": {"type": "string", "enum": ["accepted", "rejected", "inconclusive", "not_evaluated"]},
+                                         "reason": {"type": "string"},
+                                         "method": {"type": "string"},
+                                         "confidence_level": {"type": "number"},
+                                         "interval_scope": {"type": "string"},
+                                         "requirements": ref("ServiceRequirements"),
+                                         "conditions": {"type": "array", "items": {"type": "object"}}}},
     "RunMetadata": {"type": "object", "description": "Current calculations include these fields; historical results may omit them.",
                     "properties": {
                         "run_spec": {"oneOf": [ref("RunSpec"), {"type": "null"}]},
@@ -245,9 +332,7 @@ schemas = {
                         "simulation_days": {"type": "integer"}, "solver_seconds": {"type": "integer"}}},
     "PlanResult": {"type": "object", "required": ["optimization", "simulation", "operational_validation", "operational_economics", "explanations", "alternatives", "metadata"],
                    "properties": {"optimization": ref("OptimizationResult"),
-                                  "service_acceptance": {"type": "object", "required": ["status", "reason"],
-                                      "description": "Absent in legacy stored results. No formal operational acceptance is implemented in this version.",
-                                      "properties": {"status": {"const": "not_evaluated"}, "reason": {"const": "service_requirements_not_configured"}}},
+                                  "service_acceptance": ref("ServiceAcceptance"),
                                   "simulation": {"type": "array", "items": ref("SimulationResult")},
                                   "operational_validation": {"type": "array", "items": ref("OperationalValidation")},
                                   "operational_economics": {"type": "array", "items": ref("OperationalEconomics")},
@@ -259,8 +344,8 @@ schemas = {
                                        "name": {"type": "string"}, "kind": {"type": "string", "enum": ["observed", "derived", "assumed"]},
                                        "source": {"type": "string"}, "license": {"type": ["string", "null"]},
                                        "checksum": {"type": "string"},
-                                       "format": {"type": "string", "enum": ["geojson", "csv"]},
-                                       "role": {"type": "string", "enum": ["demand_sessions", "grid_headroom"]},
+                                       "format": {"type": "string", "enum": ["geojson", "csv", "mobility"]},
+                                       "role": {"type": "string", "enum": ["demand_sessions", "grid_headroom", "mobility_source"]},
                                        "captured_at": {"type": ["string", "null"], "format": "date-time"},
                                        "created_at": {"type": "string", "format": "date-time"}}},
     "DatasetImportResult": {"type": "object", "required": ["dataset_id", "features", "sha256"],
@@ -354,6 +439,26 @@ document = {
             "requestBody": body(ref("DatasetScenarioRequest")),
             "responses": {"200": response(ref("PreparedDatasetScenario")),
                           "404": response(ref("Error")), "503": response(ref("Error")), **error_responses}}},
+        "/api/v1/scenarios/from-mobility/preview": {"post": {
+            "summary": "Derive potential public charging requests from an explicit vehicle itinerary",
+            "description": "Returns an unsaved PlanningInput and physical audit. The 24-hour hourly_kwh is the mean over explicitly covered local dates; calendar_profiles are diagnostic and do not yet drive multiday optimization or simulation. Assumed public charging in the projection is not actual service. Persist the returned spec through POST /api/v1/scenarios before running it.",
+            "requestBody": body(ref("MobilityCompileRequest")),
+            "responses": {"200": response(ref("PreparedMobilityScenario")),
+                          "400": response(ref("Error"), "Malformed JSON"),
+                          "413": response(ref("Error"), "Request exceeds 4 MiB"),
+                          "502": response(ref("Error"), "Invalid engine output"),
+                          "503": response(ref("Error"), "Compiler unavailable"),
+                          **error_responses}}},
+        "/api/v1/scenarios/from-mobility": {"post": {
+            "summary": "Compile and atomically save a mobility-derived scenario and its source",
+            "description": "Stores the compiled scenario, exact pre-transformation input and canonical itinerary. source_access_token is returned only once; retain it securely to retrieve the sensitive source later. An API bearer token is also required. The endpoint does not start optimization.",
+            "requestBody": body(ref("MobilityCreateRequest")),
+            "responses": {"201": response(ref("SavedMobilityScenario")),
+                          "400": response(ref("Error"), "Malformed JSON"),
+                          "413": response(ref("Error"), "Request exceeds 4 MiB"),
+                          "502": response(ref("Error"), "Invalid engine output"),
+                          "503": response(ref("Error"), "Compiler unavailable"),
+                          **error_responses}}},
         "/api/v1/scenarios/from-datasets": {"post": {
             "summary": "Assemble and save an immutable scenario from exact imported versions",
             "requestBody": body(ref("DatasetScenarioRequest")),
@@ -361,6 +466,13 @@ document = {
                           "404": response(ref("Error")), "503": response(ref("Error")), **error_responses}}},
         "/api/v1/scenarios/{id}": {"get": {"summary": "Get scenario", "parameters": [uuid_param],
             "responses": {"200": response(ref("SavedScenario")), "404": response(ref("Error")), **error_responses}}},
+        "/api/v1/scenarios/{id}/mobility-origin": {"get": {
+            "summary": "Retrieve the canonical mobility source and pre-transformation scenario",
+            "description": "Requires both the API bearer token and the 256-bit source capability returned by POST /from-mobility. A missing or invalid capability returns 404 without revealing whether an origin exists.",
+            "parameters": [uuid_param, {"name": "X-Mobility-Source-Token", "in": "header", "required": True,
+                                       "schema": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}],
+            "responses": {"200": response(ref("MobilityOrigin")), "404": response(ref("Error")),
+                          **error_responses}}},
         "/api/v1/scenarios/{id}/imports/sessions": {"post": {
             "summary": "Derive an immutable scenario from uploaded charging sessions CSV",
             "description": "Sessions are completed charging, not latent unmet demand. The original CSV bytes are stored under dataset_id. Upload does not start a calculation; use the new scenario id with /runs.",

@@ -19,6 +19,9 @@ class DatasetReference(FiniteModel):
     name: str = Field(min_length=1)
     role: Literal["demand_sessions", "demand_zones", "candidate_sites", "grid", "tariff", "routing", "planning_assumptions", "other"]
     kind: Literal["observed", "derived", "assumed"]
+    # `kind=derived` describes the transformed planning input, while this field
+    # preserves whether the source records were observed or scenario assumptions.
+    source_kind: Literal["observed", "assumed"] | None = None
     source: str = Field(min_length=1)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     version_id: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")

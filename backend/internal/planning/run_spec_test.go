@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +29,7 @@ func TestRunSpecFreezesScenarioDefaultsAndExplicitZeroOptions(t *testing.T) {
 
 func TestRunSpecRejectsAmbiguityAndUnboundedWork(t *testing.T) {
 	for _, raw := range []string{
+		`{"service_requirements":{"min_energy_fraction":0.9}}`,
 		`null`, `[]`, `{} {}`, `{"unknown":1}`, `{"Mode":"validation"}`,
 		`{"mode":"exploratory","mode":"validation"}`,
 		`{"mode":null}`, `{"simulation_seeds":null}`, `{"simulation_seeds":[]}`,
@@ -79,6 +81,40 @@ func TestValidationModeRequiresDistinctBoundedSeeds(t *testing.T) {
 		valid := count >= 30 && count <= 100
 		if valid != (err == nil) || (valid && len(spec.SimulationSeeds) != count) {
 			t.Fatalf("seed count %d: %+v %v", count, spec, err)
+		}
+	}
+}
+
+func TestServiceRequirementsAreValidatedAndPersisted(t *testing.T) {
+	good := json.RawMessage(`{"mode":"validation","simulation_seeds":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29],"service_requirements":{"min_energy_fraction":0.9,"min_seeds_per_condition":30}}`)
+	spec, err := ResolveRunSpec(good, nil)
+	if err != nil || len(spec.ServiceRequirements) == 0 {
+		t.Fatalf("valid service gate was not persisted: %+v %v", spec, err)
+	}
+	encoded, err := json.Marshal(spec)
+	if err != nil || !json.Valid(encoded) {
+		t.Fatalf("service gate lost on marshaling: %v", err)
+	}
+	replayed, err := ResolveRunSpec(encoded, nil)
+	if err != nil || !reflect.DeepEqual(spec, replayed) {
+		t.Fatalf("service gate changed on replay: %v", err)
+	}
+	tooFewSeeds := strings.Replace(string(good), `"min_seeds_per_condition":30`, `"min_seeds_per_condition":31`, 1)
+	if _, err := ResolveRunSpec(json.RawMessage(tooFewSeeds), nil); !errors.Is(err, ErrInvalidRunSpec) {
+		t.Fatalf("service gate exceeding configured seeds accepted: %v", err)
+	}
+	for _, raw := range []string{
+		`{"service_requirements":{}}`,
+		`{"service_requirements":null}`,
+		`{"service_requirements":{"min_energy_fraction":-0.01}}`,
+		`{"service_requirements":{"min_energy_fraction":1.01}}`,
+		`{"service_requirements":{"min_energy_fraction":true}}`,
+		`{"service_requirements":{"min_energy_fraction":0.9,"unknown":1}}`,
+		`{"service_requirements":{"min_energy_fraction":0.9,"schema_version":"service-v2"}}`,
+		`{"service_requirements":{"min_energy_fraction":0.9,"min_seeds_per_condition":101}}`,
+	} {
+		if _, err := ResolveRunSpec(json.RawMessage(raw), nil); !errors.Is(err, ErrInvalidRunSpec) {
+			t.Errorf("invalid service gate accepted: %s: %v", raw, err)
 		}
 	}
 }

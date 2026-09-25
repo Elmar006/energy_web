@@ -29,8 +29,12 @@ func (s *Store) ImportDataset(ctx context.Context, reader io.Reader, meta geogra
 
 func (s *Store) Datasets(ctx context.Context) ([]Dataset, error) {
 	rows, err := s.DB.Query(ctx, `SELECT d.id::text,d.name,d.kind,d.source,d.license,d.checksum,
-		d.captured_at,d.created_at,CASE WHEN u.dataset_version_id IS NULL THEN 'geojson' ELSE 'csv' END,
-		u.role FROM dataset_versions d LEFT JOIN uploaded_csv u ON u.dataset_version_id=d.id
+		d.captured_at,d.created_at,
+		CASE WHEN m.dataset_version_id IS NOT NULL THEN 'mobility'
+		     WHEN u.dataset_version_id IS NOT NULL THEN 'csv' ELSE 'geojson' END,
+		CASE WHEN m.dataset_version_id IS NOT NULL THEN 'mobility_source' ELSE u.role END
+		FROM dataset_versions d LEFT JOIN uploaded_csv u ON u.dataset_version_id=d.id
+		LEFT JOIN scenario_mobility_sources m ON m.dataset_version_id=d.id
 		ORDER BY d.created_at DESC,d.id DESC LIMIT 100`)
 	if err != nil {
 		return nil, err

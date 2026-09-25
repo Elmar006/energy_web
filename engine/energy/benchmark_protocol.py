@@ -16,7 +16,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 
 from .contracts import PlanningInput
-from .run_spec import engine_source_manifest
+from .run_spec import engine_source_manifest, input_sha256 as canonical_input_sha256
 
 
 BASELINES = ("existing", "density", "optimized")
@@ -24,9 +24,7 @@ STRESS_CASES = ("outage", "demand_x0_75", "demand_x1_25", "grid_x0_75", "grid_x1
 
 
 def input_sha256(spec: PlanningInput) -> str:
-    canonical = json.dumps(spec.model_dump(mode="json"), ensure_ascii=False,
-                           sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(canonical).hexdigest()
+    return canonical_input_sha256(spec)
 
 
 class BudgetLock(BaseModel):
