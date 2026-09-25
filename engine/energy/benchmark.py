@@ -14,12 +14,12 @@ import subprocess
 from dataclasses import dataclass, field
 from importlib.metadata import version
 from pathlib import Path
-from statistics import mean
 from time import monotonic
 
 import numpy as np
 
 from .contracts import PlanningInput
+from .benchmark_protocol import BenchmarkProtocol, input_sha256, load_locked_protocol
 from .optimizer import solve
 from .simulation import simulate
 
@@ -208,7 +208,19 @@ def _git_head() -> str | None:
         return None
 
 
-def benchmark(spec: PlanningInput, *, seeds: list[int], year: int, scenario_id: str) -> dict:
+def benchmark(spec: PlanningInput, *, seeds: list[int] | None = None,
+              year: int | None = None, scenario_id: str | None = None,
+              protocol: BenchmarkProtocol | None = None) -> dict:
+    if protocol is not None:
+        if seeds is not None or year is not None or scenario_id is not None:
+            raise ValueError("ad-hoc seed, year and scenario overrides are forbidden with a protocol")
+        protocol.verify_input(spec)
+        seeds = list(protocol.split.evaluation_seeds)
+        year = protocol.evaluation_year
+        scenario_id = protocol.evaluation_scenario_id
+    elif seeds is None or year is None or scenario_id is None:
+        raise ValueError("seeds, year and scenario_id are required without a protocol")
+    assert seeds is not None and year is not None and scenario_id is not None
     if len(seeds) < 30 or len(set(seeds)) != len(seeds) or any(seed < 0 for seed in seeds):
         raise ValueError("benchmark requires at least 30 unique nonnegative seeds")
     if year not in spec.parameters.years or scenario_id not in {s.id for s in spec.scenarios}:
@@ -346,8 +358,6 @@ def benchmark(spec: PlanningInput, *, seeds: list[int], year: int, scenario_id: 
             conditions[label] = {key: interval([row[key] for row in rows if row[key] is not None])
                                  for key in rows[0]}
         stress[name] = {"failed_site_id": failed_site, "conditions": conditions}
-    canonical = json.dumps(spec.model_dump(mode="json"), ensure_ascii=False,
-                           sort_keys=True, separators=(",", ":")).encode()
     source_digest = hashlib.sha256()
     source_files = sorted(Path(__file__).parent.rglob("*.py"))
     for source_file in source_files:
@@ -358,7 +368,10 @@ def benchmark(spec: PlanningInput, *, seeds: list[int], year: int, scenario_id: 
         source_digest.update(content)
     return {
         "metadata": {
-            "input_sha256": hashlib.sha256(canonical).hexdigest(),
+            "input_sha256": input_sha256(spec),
+            "protocol": ({"status": "manifest_validated", "sha256": protocol.sha256,
+                          "spec": protocol.model_dump(mode="json")}
+                         if protocol is not None else {"status": "unregistered"}),
             "engine_source_sha256": source_digest.hexdigest(),
             "engine_source_files": [path.relative_to(Path(__file__).parent).as_posix()
                                     for path in source_files],
@@ -372,6 +385,12 @@ def benchmark(spec: PlanningInput, *, seeds: list[int], year: int, scenario_id: 
         },
         "solver": {"status": optimized.status, "gap": optimized.gap,
                    "objective": optimized.objective, "verification": optimized.verification},
+        "primary_result": ({
+            "comparison": protocol.primary_comparison,
+            "metric": protocol.primary_metric,
+            "difference_direction": "optimized_minus_density; positive means higher served fraction",
+            "difference": paired[protocol.primary_comparison][protocol.primary_metric],
+        } if protocol is not None else None),
         "plans": summaries, "paired_differences": paired, "stress": stress,
         "seed_rows": seed_rows,
     }
@@ -381,13 +400,25 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--year", type=int, required=True)
-    parser.add_argument("--scenario", required=True)
-    parser.add_argument("--seeds", type=int, default=30)
+    parser.add_argument("--protocol", type=Path)
+    parser.add_argument("--protocol-lock", type=Path)
+    parser.add_argument("--year", type=int)
+    parser.add_argument("--scenario")
+    parser.add_argument("--seeds", type=int)
     args = parser.parse_args()
     spec = PlanningInput.model_validate_json(args.input.read_bytes())
-    result = benchmark(spec, seeds=list(range(1, args.seeds + 1)),
-                       year=args.year, scenario_id=args.scenario)
+    if args.protocol is not None or args.protocol_lock is not None:
+        if args.protocol is None or args.protocol_lock is None:
+            parser.error("--protocol and --protocol-lock must be supplied together")
+        if args.year is not None or args.scenario is not None or args.seeds is not None:
+            parser.error("--year, --scenario and --seeds cannot override a locked protocol")
+        result = benchmark(spec, protocol=load_locked_protocol(args.protocol, args.protocol_lock))
+    else:
+        if args.year is None or args.scenario is None:
+            parser.error("--year and --scenario are required without a protocol")
+        count = 30 if args.seeds is None else args.seeds
+        result = benchmark(spec, seeds=list(range(1, count + 1)),
+                           year=args.year, scenario_id=args.scenario)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
