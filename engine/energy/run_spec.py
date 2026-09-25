@@ -1,8 +1,7 @@
 """Versioned execution configuration, separate from physical scenario inputs.
 
-``validation`` requires a larger simulation sample; it does not certify service
-quality. Service acceptance needs explicit requirements and an independent
-acceptance procedure, neither of which is configured by this version.
+``validation`` requires a larger simulation sample. Optional explicit service
+requirements are assessed on that sample, without claiming external validity.
 """
 from __future__ import annotations
 
@@ -14,6 +13,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .contracts import PlanningInput
+from .acceptance import ServiceRequirements
 
 Seed = Annotated[int, Field(strict=True, ge=0, le=2_147_483_647)]
 ServiceFraction = Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
@@ -42,6 +42,7 @@ class RunSpec(BaseModel):
                                description="When omitted, inherits input.parameters.solver_seconds.")
     simulation_days: int = Field(default=3, ge=1, le=14,
                                 description="When omitted, inherits input.parameters.simulation_days.")
+    service_requirements: ServiceRequirements | None = None
 
     @model_validator(mode="after")
     def validate_execution_settings(self):
@@ -49,6 +50,11 @@ class RunSpec(BaseModel):
             raise ValueError("simulation_seeds must contain unique integers")
         if self.mode == "validation" and len(self.simulation_seeds) < 30:
             raise ValueError("validation mode requires at least 30 simulation_seeds")
+        if self.service_requirements is not None and self.mode != "validation":
+            raise ValueError("service_requirements require validation mode")
+        if (self.service_requirements is not None and
+                len(self.simulation_seeds) < self.service_requirements.min_seeds_per_condition):
+            raise ValueError("simulation_seeds do not meet min_seeds_per_condition")
         targets = self.alternative_service_fractions
         if targets != sorted(set(targets)):
             raise ValueError("alternative_service_fractions must be unique and sorted")
@@ -56,7 +62,10 @@ class RunSpec(BaseModel):
 
     def resolve(self, planning_input: PlanningInput) -> RunSpec:
         """Return a fully explicit specification without modifying either input."""
-        settings = self.model_dump()
+        settings = self.model_dump(exclude_none=True)
+        if self.service_requirements is not None:
+            settings["service_requirements"] = self.service_requirements.model_dump(
+                exclude_unset=True, exclude_none=True)
         for field in ("solver_seconds", "simulation_days"):
             if field not in self.model_fields_set:
                 settings[field] = getattr(planning_input.parameters, field)
@@ -72,7 +81,13 @@ class RunSpec(BaseModel):
 
 
 def input_sha256(planning_input: PlanningInput) -> str:
-    canonical = json.dumps(planning_input.model_dump(mode="json"), ensure_ascii=False,
+    snapshot = planning_input.model_dump(mode="json")
+    # This optional provenance attribute was added after the locked commission
+    # benchmark. Omitted values must not change the canonical hash of old inputs.
+    for dataset in snapshot["datasets"]:
+        if dataset.get("source_kind") is None:
+            dataset.pop("source_kind", None)
+    canonical = json.dumps(snapshot, ensure_ascii=False,
                            sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()
 

@@ -16,9 +16,11 @@ from .contracts import PlanningInput
 from .ingest_grid import TRANSFORM_VERSION as GRID_TRANSFORM_VERSION, apply_grid_profile
 from .ingest_sessions import TRANSFORM_VERSION as SESSION_TRANSFORM_VERSION, derive_demand
 from .analysis import explain_selected_sites
+from .acceptance import assess_service
 from .alternatives import calculate_alternatives
 from .corridor import CorridorInput, check_corridor
 from .fleet import FleetInput, schedule_fleet
+from .mobility import MobilityInput, compile_mobility
 from .optimizer import solve
 from .run_spec import RunSpec, engine_source_manifest, input_sha256
 from .simulation import simulate
@@ -75,6 +77,13 @@ class DeriveRequest(BaseModel):
     end_date: date | None = None
     profile_date: date | None = None
     coverage_complete: bool = False
+
+
+class MobilityCompileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input: PlanningInput
+    mobility: MobilityInput
 
 
 @app.get("/healthz")
@@ -144,6 +153,14 @@ def fleet_schedule(request: FleetInput):
     return schedule_fleet(request)
 
 
+@app.post("/v1/mobility/compile")
+def mobility_compile(request: MobilityCompileRequest):
+    try:
+        return compile_mobility(request.input, request.mobility)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
 async def _calculation_request_sha256(request: Request) -> str:
     # Bind the computed result to the exact HTTP payload received by FastAPI,
     # before Pydantic normalizes defaults, floating-point values or key order.
@@ -162,7 +179,7 @@ def calculate(request: CalculationRequest, request_sha256: str = Depends(_calcul
               "service_acceptance": {"status": "not_evaluated",
                                      "reason": "service_requirements_not_configured"},
               "metadata": {"model_version": "planner-mip-v3", "simulation_version": "simpy-multiday-v1",
-                           "run_spec": request.run_spec.model_dump(mode="json") if request.run_spec is not None else None,
+                           "run_spec": _run_spec_metadata(request.run_spec),
                            "configuration_source": "run_spec" if request.run_spec is not None else "legacy_fields",
                            "engine_request_sha256": request_sha256,
                            "source_input_sha256": input_sha256(request.input),
@@ -179,6 +196,11 @@ def calculate(request: CalculationRequest, request_sha256: str = Depends(_calcul
                            "alternative_service_fractions": settings.alternative_service_fractions,
                            "alternative_solver_seconds": settings.alternative_solver_seconds}}
     if result.status not in ("optimal", "feasible"):
+        output["service_acceptance"] = assess_service(
+            spec, result.as_dict(), [],
+            request.run_spec.service_requirements if request.run_spec is not None else None,
+            validation_mode=request.run_spec is not None and request.run_spec.mode == "validation",
+            expected_seeds=settings.simulation_seeds)
         return output
     for scenario in spec.scenarios:
         for year in spec.parameters.years:
@@ -191,10 +213,33 @@ def calculate(request: CalculationRequest, request_sha256: str = Depends(_calcul
                     raise HTTPException(status_code=500, detail="operational dispatch failed physical verification")
                 output["simulation"].append(run)
     output["operational_validation"] = compare_operations(result, output["simulation"])
+    output["service_acceptance"] = assess_service(
+        spec, result.as_dict(), output["simulation"],
+        request.run_spec.service_requirements if request.run_spec is not None else None,
+        validation_mode=request.run_spec is not None and request.run_spec.mode == "validation",
+        expected_seeds=settings.simulation_seeds)
     output["operational_economics"] = compare_economics(spec, result, output["simulation"])
     if settings.explain_top_n:
         output["explanations"] = explain_selected_sites(spec, result, settings.explain_top_n)
     if settings.alternative_service_fractions:
         output["alternatives"] = calculate_alternatives(spec, settings.alternative_service_fractions,
                                                        settings.simulation_seeds, settings.alternative_solver_seconds)
+        for alternative in output["alternatives"]:
+            alternative["service_acceptance"] = assess_service(
+                spec, alternative["optimization"], alternative["simulation"],
+                request.run_spec.service_requirements if request.run_spec is not None else None,
+                validation_mode=request.run_spec is not None and request.run_spec.mode == "validation",
+                expected_seeds=settings.simulation_seeds)
     return output
+
+
+def _run_spec_metadata(spec: RunSpec | None) -> dict | None:
+    if spec is None:
+        return None
+    data = spec.model_dump(mode="json", exclude_none=True)
+    if spec.service_requirements is not None:
+        # Preserve the exact optional object accepted by the Go RunSpec so the
+        # worker can compare the persisted execution snapshot to this echo.
+        data["service_requirements"] = spec.service_requirements.model_dump(
+            mode="json", exclude_unset=True, exclude_none=True)
+    return data

@@ -112,6 +112,22 @@
             "title": "Kind",
             "type": "string"
           },
+          "source_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "observed",
+                  "assumed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Kind"
+          },
           "source": {
             "minLength": 1,
             "title": "Source",
@@ -937,6 +953,284 @@
         "title": "FleetTrip",
         "type": "object"
       },
+      "Drive": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "drive",
+            "title": "Kind",
+            "type": "string"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "destination_zone_id": {
+            "minLength": 1,
+            "title": "Destination Zone Id",
+            "type": "string"
+          },
+          "distance_km": {
+            "exclusiveMinimum": 0,
+            "title": "Distance Km",
+            "type": "number"
+          },
+          "consumption_multiplier": {
+            "default": 1,
+            "exclusiveMinimum": 0,
+            "title": "Consumption Multiplier",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "start_at",
+          "end_at",
+          "destination_zone_id",
+          "distance_km"
+        ],
+        "title": "Drive",
+        "type": "object"
+      },
+      "MobilityVehicle": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "segment": {
+            "enum": [
+              "private",
+              "taxi",
+              "fleet",
+              "corridor"
+            ],
+            "title": "Segment",
+            "type": "string"
+          },
+          "initial_zone_id": {
+            "minLength": 1,
+            "title": "Initial Zone Id",
+            "type": "string"
+          },
+          "battery_kwh": {
+            "exclusiveMinimum": 0,
+            "title": "Battery Kwh",
+            "type": "number"
+          },
+          "initial_kwh": {
+            "minimum": 0,
+            "title": "Initial Kwh",
+            "type": "number"
+          },
+          "reserve_kwh": {
+            "minimum": 0,
+            "title": "Reserve Kwh",
+            "type": "number"
+          },
+          "consumption_kwh_per_km": {
+            "exclusiveMinimum": 0,
+            "title": "Consumption Kwh Per Km",
+            "type": "number"
+          },
+          "max_charge_kw": {
+            "exclusiveMinimum": 0,
+            "title": "Max Charge Kw",
+            "type": "number"
+          },
+          "charging_efficiency": {
+            "default": 0.9,
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "title": "Charging Efficiency",
+            "type": "number"
+          },
+          "population_weight": {
+            "default": 1,
+            "exclusiveMinimum": 0,
+            "maximum": 10000,
+            "title": "Population Weight",
+            "type": "number"
+          },
+          "population_weight_basis": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Population Weight Basis"
+          },
+          "activities": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "drive": "#/components/schemas/Drive",
+                  "park": "#/components/schemas/Park"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Drive"
+                },
+                {
+                  "$ref": "#/components/schemas/Park"
+                }
+              ]
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Activities",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "segment",
+          "initial_zone_id",
+          "battery_kwh",
+          "initial_kwh",
+          "reserve_kwh",
+          "consumption_kwh_per_km",
+          "max_charge_kw",
+          "activities"
+        ],
+        "title": "MobilityVehicle",
+        "type": "object"
+      },
+      "Park": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "park",
+            "title": "Kind",
+            "type": "string"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "zone_id": {
+            "minLength": 1,
+            "title": "Zone Id",
+            "type": "string"
+          },
+          "private_charger_kw": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Private Charger Kw",
+            "type": "number"
+          },
+          "public_allowed": {
+            "default": false,
+            "title": "Public Allowed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "start_at",
+          "end_at",
+          "zone_id"
+        ],
+        "title": "Park",
+        "type": "object"
+      },
+      "ServiceRequirements": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "service-v1",
+            "default": "service-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "min_energy_fraction": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Min Energy Fraction"
+          },
+          "min_session_fraction": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Min Session Fraction"
+          },
+          "max_refusal_fraction": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Refusal Fraction"
+          },
+          "max_mean_seed_p95_wait_minutes": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Mean Seed P95 Wait Minutes"
+          },
+          "min_seeds_per_condition": {
+            "default": 30,
+            "maximum": 100,
+            "minimum": 2,
+            "title": "Min Seeds Per Condition",
+            "type": "integer"
+          }
+        },
+        "title": "ServiceRequirements",
+        "type": "object"
+      },
       "ScenarioSpec": {
         "additionalProperties": false,
         "properties": {
@@ -1161,6 +1455,476 @@
         "title": "FleetInput",
         "type": "object"
       },
+      "MobilityInput": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "mobility-v1",
+            "default": "mobility-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "time_zone": {
+            "minLength": 1,
+            "title": "Time Zone",
+            "type": "string"
+          },
+          "covered_dates": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "maxItems": 366,
+            "minItems": 1,
+            "title": "Covered Dates",
+            "type": "array"
+          },
+          "replace_zone_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Replace Zone Ids",
+            "type": "array"
+          },
+          "source": {
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "source_kind": {
+            "enum": [
+              "observed",
+              "assumed"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "License"
+          },
+          "max_average_speed_kmh": {
+            "default": 250,
+            "exclusiveMinimum": 0,
+            "maximum": 300,
+            "title": "Max Average Speed Kmh",
+            "type": "number"
+          },
+          "vehicles": {
+            "items": {
+              "$ref": "#/components/schemas/MobilityVehicle"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Vehicles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "time_zone",
+          "covered_dates",
+          "replace_zone_ids",
+          "source",
+          "source_kind",
+          "vehicles"
+        ],
+        "title": "MobilityInput",
+        "type": "object"
+      },
+      "ChargingRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "vehicle_id": {
+            "title": "Vehicle Id",
+            "type": "string"
+          },
+          "segment": {
+            "enum": [
+              "private",
+              "taxi",
+              "fleet",
+              "corridor"
+            ],
+            "title": "Segment",
+            "type": "string"
+          },
+          "zone_id": {
+            "title": "Zone Id",
+            "type": "string"
+          },
+          "arrival_at": {
+            "format": "date-time",
+            "title": "Arrival At",
+            "type": "string"
+          },
+          "deadline_at": {
+            "format": "date-time",
+            "title": "Deadline At",
+            "type": "string"
+          },
+          "energy_from_charger_kwh": {
+            "exclusiveMinimum": 0,
+            "title": "Energy From Charger Kwh",
+            "type": "number"
+          },
+          "battery_kwh": {
+            "exclusiveMinimum": 0,
+            "title": "Battery Kwh",
+            "type": "number"
+          },
+          "soc_before_kwh": {
+            "minimum": 0,
+            "title": "Soc Before Kwh",
+            "type": "number"
+          },
+          "max_vehicle_kw": {
+            "exclusiveMinimum": 0,
+            "title": "Max Vehicle Kw",
+            "type": "number"
+          },
+          "population_weight": {
+            "exclusiveMinimum": 0,
+            "title": "Population Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "vehicle_id",
+          "segment",
+          "zone_id",
+          "arrival_at",
+          "deadline_at",
+          "energy_from_charger_kwh",
+          "battery_kwh",
+          "soc_before_kwh",
+          "max_vehicle_kw",
+          "population_weight"
+        ],
+        "title": "ChargingRequest",
+        "type": "object"
+      },
+      "MobilityCompileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "mobility"
+        ],
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/ScenarioSpec"
+          },
+          "mobility": {
+            "$ref": "#/components/schemas/MobilityInput"
+          }
+        }
+      },
+      "MobilityCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "input",
+          "mobility"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "input": {
+            "$ref": "#/components/schemas/ScenarioSpec"
+          },
+          "mobility": {
+            "$ref": "#/components/schemas/MobilityInput"
+          }
+        }
+      },
+      "MobilityCalendarProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "date",
+          "day_type",
+          "season",
+          "physical_hours",
+          "zone_hourly_kwh"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "day_type": {
+            "type": "string",
+            "enum": [
+              "weekday",
+              "weekend"
+            ]
+          },
+          "season": {
+            "type": "string",
+            "enum": [
+              "winter",
+              "spring",
+              "summer",
+              "autumn"
+            ]
+          },
+          "physical_hours": {
+            "type": "number",
+            "minimum": 0
+          },
+          "zone_hourly_kwh": {
+            "type": "object",
+            "description": "Sparse map; absent zone means zero requests on this covered date.",
+            "additionalProperties": {
+              "type": "array",
+              "minItems": 24,
+              "maxItems": 24,
+              "items": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      },
+      "MobilityVehicleAudit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "vehicle_id",
+          "population_weight_basis",
+          "initial_kwh",
+          "driving_kwh",
+          "private_metered_kwh",
+          "public_requested_metered_kwh",
+          "weighted_public_requested_kwh",
+          "population_weight",
+          "projected_final_kwh",
+          "balance_error_kwh"
+        ],
+        "properties": {
+          "vehicle_id": {
+            "type": "string"
+          },
+          "population_weight_basis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "initial_kwh": {
+            "type": "number"
+          },
+          "driving_kwh": {
+            "type": "number"
+          },
+          "private_metered_kwh": {
+            "type": "number"
+          },
+          "public_requested_metered_kwh": {
+            "type": "number"
+          },
+          "weighted_public_requested_kwh": {
+            "type": "number"
+          },
+          "population_weight": {
+            "type": "number"
+          },
+          "projected_final_kwh": {
+            "type": "number"
+          },
+          "balance_error_kwh": {
+            "type": "number"
+          }
+        }
+      },
+      "MobilityAudit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "vehicles",
+          "request_count",
+          "population_weighted_public_kwh",
+          "covered_dates",
+          "source_kind",
+          "projection"
+        ],
+        "properties": {
+          "vehicles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilityVehicleAudit"
+            }
+          },
+          "request_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "population_weighted_public_kwh": {
+            "type": "number",
+            "minimum": 0
+          },
+          "covered_dates": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "source_kind": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "assumed"
+            ]
+          },
+          "projection": {
+            "type": "string"
+          }
+        }
+      },
+      "PreparedMobilityScenario": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "spec",
+          "requests",
+          "calendar_profiles",
+          "audit",
+          "source_sha256",
+          "source_canonical_json",
+          "compiler_source_sha256",
+          "compiler_pydantic_version"
+        ],
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/ScenarioSpec"
+          },
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChargingRequest"
+            }
+          },
+          "calendar_profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilityCalendarProfile"
+            }
+          },
+          "audit": {
+            "$ref": "#/components/schemas/MobilityAudit"
+          },
+          "source_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "source_canonical_json": {
+            "type": "string",
+            "description": "Normalized mobility-v1 JSON exactly hashed by source_sha256; archive with the scenario for reproducibility."
+          },
+          "compiler_source_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "compiler_pydantic_version": {
+            "type": "string"
+          }
+        }
+      },
+      "SavedMobilityScenario": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenario",
+          "dataset_version_id",
+          "source_sha256",
+          "base_sha256",
+          "source_access_token"
+        ],
+        "properties": {
+          "scenario": {
+            "$ref": "#/components/schemas/SavedScenario"
+          },
+          "dataset_version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "base_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "source_access_token": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Returned once. Retain securely; required with API bearer token to retrieve the original itinerary."
+          }
+        }
+      },
+      "MobilityOrigin": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenario_id",
+          "dataset_version_id",
+          "base_input",
+          "base_sha256",
+          "source_canonical_json",
+          "source_sha256",
+          "compiler_version",
+          "compiler_source_sha256",
+          "compiler_pydantic_version"
+        ],
+        "properties": {
+          "scenario_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dataset_version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "base_input": {
+            "$ref": "#/components/schemas/ScenarioSpec"
+          },
+          "base_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "source_canonical_json": {
+            "type": "string"
+          },
+          "source_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "compiler_version": {
+            "type": "string"
+          },
+          "compiler_source_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "compiler_pydantic_version": {
+            "type": "string"
+          }
+        }
+      },
       "RunSpec": {
         "additionalProperties": false,
         "description": "Fully resolved immutable execution controls, persisted when the run is queued.",
@@ -1243,6 +2007,9 @@
             "minimum": 1,
             "title": "Simulation Days",
             "type": "integer"
+          },
+          "service_requirements": {
+            "$ref": "#/components/schemas/ServiceRequirements"
           }
         },
         "title": "RunSpec",
@@ -1286,7 +2053,7 @@
       },
       "RunSpecOverrides": {
         "additionalProperties": false,
-        "description": "Optional execution overrides; omitted solver_seconds/simulation_days inherit the saved scenario. Null fields are rejected. Validation mode requires at least 30 distinct seeds; it does not certify service quality.",
+        "description": "Optional execution overrides; omitted solver_seconds/simulation_days inherit the saved scenario. Null fields are rejected. Validation mode requires at least 30 distinct seeds. Service requirements, when supplied, gate the simulated operational result only.",
         "properties": {
           "schema_version": {
             "const": "run-spec-v1",
@@ -1366,6 +2133,9 @@
             "minimum": 1,
             "title": "Simulation Days",
             "type": "integer"
+          },
+          "service_requirements": {
+            "$ref": "#/components/schemas/ServiceRequirements"
           }
         },
         "title": "RunSpecOverrides",
@@ -2367,6 +3137,49 @@
             "items": {
               "$ref": "#/components/schemas/OperationalEconomics"
             }
+          },
+          "service_acceptance": {
+            "$ref": "#/components/schemas/ServiceAcceptance"
+          }
+        }
+      },
+      "ServiceAcceptance": {
+        "type": "object",
+        "required": [
+          "status",
+          "reason"
+        ],
+        "description": "Assessment of simulated streams, not external validation of assumptions.",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected",
+              "inconclusive",
+              "not_evaluated"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "confidence_level": {
+            "type": "number"
+          },
+          "interval_scope": {
+            "type": "string"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/ServiceRequirements"
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
           }
         }
       },
@@ -2455,20 +3268,7 @@
             "$ref": "#/components/schemas/OptimizationResult"
           },
           "service_acceptance": {
-            "type": "object",
-            "required": [
-              "status",
-              "reason"
-            ],
-            "description": "Absent in legacy stored results. No formal operational acceptance is implemented in this version.",
-            "properties": {
-              "status": {
-                "const": "not_evaluated"
-              },
-              "reason": {
-                "const": "service_requirements_not_configured"
-              }
-            }
+            "$ref": "#/components/schemas/ServiceAcceptance"
           },
           "simulation": {
             "type": "array",
@@ -3024,6 +3824,182 @@
         }
       }
     },
+    "/api/v1/scenarios/from-mobility/preview": {
+      "post": {
+        "summary": "Derive potential public charging requests from an explicit vehicle itinerary",
+        "description": "Returns an unsaved PlanningInput and physical audit. The 24-hour hourly_kwh is the mean over explicitly covered local dates; calendar_profiles are diagnostic and do not yet drive multiday optimization or simulation. Assumed public charging in the projection is not actual service. Persist the returned spec through POST /api/v1/scenarios before running it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobilityCompileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparedMobilityScenario"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request exceeds 4 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid engine output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Compiler unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios/from-mobility": {
+      "post": {
+        "summary": "Compile and atomically save a mobility-derived scenario and its source",
+        "description": "Stores the compiled scenario, exact pre-transformation input and canonical itinerary. source_access_token is returned only once; retain it securely to retrieve the sensitive source later. An API bearer token is also required. The endpoint does not start optimization.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobilityCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedMobilityScenario"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request exceeds 4 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid engine output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Compiler unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenarios/from-datasets": {
       "post": {
         "summary": "Assemble and save an immutable scenario from exact imported versions",
@@ -3112,6 +4088,74 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SavedScenario"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios/{id}/mobility-origin": {
+      "get": {
+        "summary": "Retrieve the canonical mobility source and pre-transformation scenario",
+        "description": "Requires both the API bearer token and the 256-bit source capability returned by POST /from-mobility. A missing or invalid capability returns 404 without revealing whether an origin exists.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Mobility-Source-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobilityOrigin"
                 }
               }
             }

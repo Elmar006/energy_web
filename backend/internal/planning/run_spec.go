@@ -8,21 +8,23 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 )
 
 // RunSpec is the fully resolved, immutable configuration of one execution.
 // Scenario values remain unchanged when per-run solver/day overrides are used.
 type RunSpec struct {
-	SchemaVersion               string    `json:"schema_version"`
-	ModelVersion                string    `json:"model_version"`
-	SimulationVersion           string    `json:"simulation_version"`
-	Mode                        string    `json:"mode"`
-	SimulationSeeds             []int     `json:"simulation_seeds"`
-	ExplainTopN                 int       `json:"explain_top_n"`
-	AlternativeServiceFractions []float64 `json:"alternative_service_fractions"`
-	AlternativeSolverSeconds    int       `json:"alternative_solver_seconds"`
-	SolverSeconds               int       `json:"solver_seconds"`
-	SimulationDays              int       `json:"simulation_days"`
+	SchemaVersion               string          `json:"schema_version"`
+	ModelVersion                string          `json:"model_version"`
+	SimulationVersion           string          `json:"simulation_version"`
+	Mode                        string          `json:"mode"`
+	SimulationSeeds             []int           `json:"simulation_seeds"`
+	ExplainTopN                 int             `json:"explain_top_n"`
+	AlternativeServiceFractions []float64       `json:"alternative_service_fractions"`
+	AlternativeSolverSeconds    int             `json:"alternative_solver_seconds"`
+	SolverSeconds               int             `json:"solver_seconds"`
+	SimulationDays              int             `json:"simulation_days"`
+	ServiceRequirements         json.RawMessage `json:"service_requirements,omitempty"`
 }
 
 var ErrInvalidRunSpec = errors.New("invalid run specification")
@@ -75,6 +77,7 @@ func ResolveRunSpec(raw, scenario json.RawMessage) (RunSpec, error) {
 			"mode": true, "simulation_seeds": true, "explain_top_n": true,
 			"alternative_service_fractions": true, "alternative_solver_seconds": true,
 			"solver_seconds": true, "simulation_days": true,
+			"service_requirements": true,
 		}
 		seen := map[string]bool{}
 		for decoder.More() {
@@ -188,6 +191,65 @@ func (s RunSpec) Validate() error {
 		if math.IsNaN(fraction) || math.IsInf(fraction, 0) || fraction < 0 || fraction > 1 || (i > 0 && fraction <= s.AlternativeServiceFractions[i-1]) {
 			return invalidRunSpec("alternative targets must be finite, unique, sorted fractions in [0,1]")
 		}
+	}
+	if len(s.ServiceRequirements) > 0 {
+		if s.Mode != "validation" {
+			return invalidRunSpec("service_requirements require validation mode")
+		}
+		if err := validateServiceRequirements(s.ServiceRequirements); err != nil {
+			return err
+		}
+		var seedMinimum struct {
+			MinSeedsPerCondition int `json:"min_seeds_per_condition"`
+		}
+		if err := json.Unmarshal(s.ServiceRequirements, &seedMinimum); err != nil {
+			return invalidRunSpec("invalid service_requirements")
+		}
+		if seedMinimum.MinSeedsPerCondition > len(s.SimulationSeeds) {
+			return invalidRunSpec("simulation_seeds do not meet min_seeds_per_condition")
+		}
+	}
+	return nil
+}
+
+// Validate the persisted service gate before enqueueing. The Python engine
+// applies the same schema and produces the actual operational assessment.
+func validateServiceRequirements(raw json.RawMessage) error {
+	var requirements struct {
+		SchemaVersion             string   `json:"schema_version"`
+		MinEnergyFraction         *float64 `json:"min_energy_fraction"`
+		MinSessionFraction        *float64 `json:"min_session_fraction"`
+		MaxRefusalFraction        *float64 `json:"max_refusal_fraction"`
+		MaxMeanSeedP95WaitMinutes *float64 `json:"max_mean_seed_p95_wait_minutes"`
+		MinSeedsPerCondition      *int     `json:"min_seeds_per_condition"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&requirements); err != nil {
+		return invalidRunSpec("invalid service_requirements: " + err.Error())
+	}
+	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
+		return invalidRunSpec("service_requirements must contain one object")
+	}
+	if requirements.SchemaVersion != "" && requirements.SchemaVersion != "service-v1" {
+		return invalidRunSpec("unsupported service_requirements schema_version")
+	}
+	if requirements.MinEnergyFraction == nil && requirements.MinSessionFraction == nil &&
+		requirements.MaxRefusalFraction == nil && requirements.MaxMeanSeedP95WaitMinutes == nil {
+		return invalidRunSpec("at least one service threshold is required")
+	}
+	for _, value := range []*float64{requirements.MinEnergyFraction, requirements.MinSessionFraction,
+		requirements.MaxRefusalFraction} {
+		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0) || *value < 0 || *value > 1) {
+			return invalidRunSpec("service fractions must be in [0,1]")
+		}
+	}
+	if value := requirements.MaxMeanSeedP95WaitMinutes; value != nil &&
+		(math.IsNaN(*value) || math.IsInf(*value, 0) || *value < 0) {
+		return invalidRunSpec("maximum wait must be nonnegative and finite")
+	}
+	if value := requirements.MinSeedsPerCondition; value != nil && (*value < 2 || *value > 100) {
+		return invalidRunSpec("min_seeds_per_condition must be in [2,100]")
 	}
 	return nil
 }

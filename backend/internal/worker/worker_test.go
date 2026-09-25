@@ -475,3 +475,26 @@ func (f *fakeRepository) Finish(_ context.Context, job planning.Job, output json
 	f.lastJob, f.lastOutput, f.lastCode = job, output, code
 	return f.accepted, nil
 }
+
+func TestServiceAcceptanceMustBeBoundToRequirementsAndCoverConditions(t *testing.T) {
+	job := testJob(t)
+	job.RunSpec.ServiceRequirements = json.RawMessage(`{"min_energy_fraction":0.9}`)
+	good := json.RawMessage(`{"status":"accepted","reason":"all_conditions_met","requirements":{"schema_version":"service-v1","min_energy_fraction":0.9,"min_seeds_per_condition":30},"conditions":[{"scenario_id":"base","year":2026,"status":"accepted"}]}`)
+	if err := verifyServiceAcceptance(good, job, "optimal"); err != nil {
+		t.Fatalf("complete acceptance rejected: %v", err)
+	}
+	for _, raw := range []string{
+		`{}`,
+		`{"status":"not_evaluated","reason":"disabled"}`,
+		`{"status":"accepted","reason":"all_conditions_met","requirements":{"min_energy_fraction":0.8},"conditions":[{"scenario_id":"base","year":2026,"status":"accepted"}]}`,
+		`{"status":"accepted","reason":"all_conditions_met","requirements":{"min_energy_fraction":0.9},"conditions":[]}`,
+		`{"status":"accepted","reason":"all_conditions_met","requirements":{"min_energy_fraction":0.9},"conditions":[{"scenario_id":"other","year":2026,"status":"accepted"}]}`,
+	} {
+		if err := verifyServiceAcceptance(json.RawMessage(raw), job, "optimal"); err == nil {
+			t.Errorf("invalid assessment was accepted: %s", raw)
+		}
+	}
+	if err := verifyServiceAcceptance(good, job, "infeasible"); err == nil {
+		t.Fatal("infeasible optimization was accepted")
+	}
+}

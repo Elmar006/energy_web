@@ -14,6 +14,10 @@ def describe_input_quality(spec: PlanningInput) -> dict:
     assumed = [zone.id for zone in spec.zones if zone.arrival_profile is not None
                and zone.arrival_profile.source_kind == "assumed"]
     parametric = [zone.id for zone in spec.zones if zone.arrival_profile is None]
+    mobility_zones = [zone.id for zone in spec.zones
+                      if zone.provenance.source.startswith("mobility-v1:")]
+    mobility_sources = [{"sha256": dataset.sha256, "source_kind": dataset.source_kind}
+                        for dataset in spec.datasets if dataset.transform_version == "mobility-v1"]
     warnings = []
     if observed:
         warnings.append("Observed charging sessions describe fulfilled charging only; latent unmet demand is unknown.")
@@ -34,6 +38,10 @@ def describe_input_quality(spec: PlanningInput) -> dict:
         warnings.append("Some session profiles are declared assumed; their apparent precision does not imply measurement.")
     if parametric:
         warnings.append("Zones without session profiles infer arrivals from hourly energy and assumed mean session size.")
+    if mobility_zones:
+        warnings.append("Mobility-derived zones represent potential public charging from supplied trips; the day profiles are averaged and simulation re-samples arrivals rather than replaying the requests.")
+        if any(source["source_kind"] == "observed" for source in mobility_sources):
+            warnings.append("Observed mobility source labels are supplied by the importer and have not been independently verified.")
     if any(zone.arrival_profile is not None and
            (zone.arrival_profile.observation_days < 7 or zone.arrival_profile.sample_count < 30)
            for zone in spec.zones):
@@ -44,11 +52,14 @@ def describe_input_quality(spec: PlanningInput) -> dict:
         "observed_session_zone_ids": observed,
         "assumed_session_zone_ids": assumed,
         "parametric_zone_ids": parametric,
+        "mobility_derived_zone_ids": mobility_zones,
+        "mobility_sources": mobility_sources,
         "unverified_coverage_zone_ids": unverified_coverage,
         "claimed_complete_coverage_zone_ids": claimed_coverage,
-        "demand_scope": ("served_sessions_only" if len(observed) == len(spec.zones) else
+        "demand_scope": ("mobility_potential" if len(mobility_zones) == len(spec.zones) else
+                         "served_sessions_only" if len(observed) == len(spec.zones) else
                          "assumed_session_profiles" if len(assumed) == len(spec.zones) else
-                         "mixed" if observed or assumed else "scenario_assumptions"),
+                         "mixed" if observed or assumed or mobility_zones else "scenario_assumptions"),
         "warnings": warnings,
     }
 

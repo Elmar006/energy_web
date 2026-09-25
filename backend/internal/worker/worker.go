@@ -220,6 +220,9 @@ func (w *Worker) calculate(ctx context.Context, job planning.Job) (json.RawMessa
 	if err := verifyResultCoverage(body["simulation"], job, optimization.Status, optimization.Verification.Passed); err != nil {
 		return nil, "engine_contract_error", err.Error()
 	}
+	if err := verifyServiceAcceptance(body["service_acceptance"], job, optimization.Status); err != nil {
+		return nil, "engine_contract_error", err.Error()
+	}
 	// These are hashes of the immutable PostgreSQL snapshots. The engine's
 	// input_sha256 uses Python canonicalization and is preserved separately.
 	for key, value := range map[string]string{
@@ -240,10 +243,74 @@ func (w *Worker) calculate(ctx context.Context, job planning.Job) (json.RawMessa
 	return output, "", ""
 }
 
+func verifyServiceAcceptance(raw json.RawMessage, job planning.Job, optimizationStatus string) error {
+	if len(job.RunSpec.ServiceRequirements) == 0 {
+		return nil
+	}
+	var report struct {
+		Status       string          `json:"status"`
+		Reason       string          `json:"reason"`
+		Requirements json.RawMessage `json:"requirements"`
+		Conditions   []struct {
+			ScenarioID string `json:"scenario_id"`
+			Year       int    `json:"year"`
+			Status     string `json:"status"`
+		} `json:"conditions"`
+	}
+	if err := json.Unmarshal(raw, &report); err != nil || report.Reason == "" ||
+		(report.Status != "accepted" && report.Status != "rejected" && report.Status != "inconclusive") {
+		return errors.New("engine result is missing a valid service acceptance status")
+	}
+	var requested, echoed map[string]any
+	if json.Unmarshal(job.RunSpec.ServiceRequirements, &requested) != nil ||
+		json.Unmarshal(report.Requirements, &echoed) != nil {
+		return errors.New("engine result is missing service requirements")
+	}
+	for name, value := range requested {
+		if !reflect.DeepEqual(value, echoed[name]) {
+			return errors.New("engine service acceptance is bound to different requirements")
+		}
+	}
+	if report.Status != "accepted" {
+		return nil
+	}
+	if optimizationStatus != "optimal" && optimizationStatus != "feasible" {
+		return errors.New("infeasible optimization cannot have accepted service")
+	}
+	var spec struct {
+		Scenarios []struct {
+			ID string `json:"id"`
+		} `json:"scenarios"`
+		Parameters struct {
+			Years []int `json:"years"`
+		} `json:"parameters"`
+	}
+	if json.Unmarshal(job.Spec, &spec) != nil {
+		return errors.New("persisted scenario cannot be checked against service assessment")
+	}
+	expected := map[string]bool{}
+	for _, scenario := range spec.Scenarios {
+		for _, year := range spec.Parameters.Years {
+			expected[fmt.Sprintf("%s/%d", scenario.ID, year)] = true
+		}
+	}
+	seen := map[string]bool{}
+	for _, condition := range report.Conditions {
+		key := fmt.Sprintf("%s/%d", condition.ScenarioID, condition.Year)
+		if condition.Status != "accepted" || !expected[key] || seen[key] {
+			return errors.New("accepted service has invalid scenario/year coverage")
+		}
+		seen[key] = true
+	}
+	if len(expected) == 0 || len(seen) != len(expected) {
+		return errors.New("accepted service is missing scenario/year conditions")
+	}
+	return nil
+}
+
 // verifyResultCoverage prevents a nominally successful 200 response from
 // becoming a successful run when whole seeds, years or scenarios are absent.
-// It does not claim that service thresholds were met: those require a separate
-// acceptance model and are currently reported as not_evaluated by the engine.
+// Service thresholds are assessed separately by verifyServiceAcceptance.
 func verifyResultCoverage(raw json.RawMessage, job planning.Job, status string, physicallyValid bool) error {
 	var simulations []struct {
 		ScenarioID *string `json:"scenario_id"`
