@@ -64,9 +64,9 @@ docker compose ps
 
 ## Проверка результата
 
-В [зафиксированном конкурсном протоколе](docs/commission/protocol_monaco.json) сравниваются существующая сеть, размещение по плотности спроса и оптимизатор. У всех планов один вход и одинаковые потоки прибытий. Отдельный прогон на **30 заранее перечисленных новых seed** дал в 2028 году **98,80%** обслуженной энергии у оптимизатора против **93,85%** у эвристики: разница **+4,95 п.п.**, модельный 95% интервал **+4,37…+5,57 п.п.** Дополнительные инвестиции — **1,5 млн ₽**; сценарный NPV у эвристики оказался выше. Это компромисс между доступностью и затратами, а не безусловное превосходство плана.
+В [протоколе для текущего вычислителя](docs/commission/protocol_monaco_current.json) сравниваются существующая сеть, размещение по плотности спроса и оптимизатор. У всех планов один вход и одинаковые потоки прибытий. Прогон на **30 новых seed 20001–20030** дал в 2028 году **98,55%** обслуженной энергии у оптимизатора против **93,21%** у эвристики: разница **+5,33 п.п.**, модельный 95% интервал **+4,69…+6,01 п.п.** Дополнительные инвестиции — **1,5 млн ₽**; сценарный NPV у эвристики оказался выше. Это компромисс между доступностью и затратами, а не безусловное превосходство плана.
 
-Результат и проверка допущений: [отчёт комиссии](docs/commission/REPORT.md), [машинный JSON](docs/commission/benchmark_monaco_holdout.json), [протокол](docs/commission/protocol_monaco.json) и [его lock](docs/commission/protocol_monaco.lock.json). **Новые seed не заменяют проверку на реальном отложенном периоде.** Интервал описывает случайность симулятора, а не достоверность сценарного спроса или резерва сети.
+Результат и проверка допущений: [отчёт комиссии](docs/commission/REPORT.md), [машинный JSON текущей версии](docs/commission/benchmark_monaco_current.json), [протокол](docs/commission/protocol_monaco_current.json) и [его lock](docs/commission/protocol_monaco_current.lock.json). [Предыдущий прогон](docs/commission/benchmark_monaco_holdout.json) остаётся архивным: его отпечаток исходников не соответствует нынешнему engine. **Новые seed не заменяют проверку на реальном отложенном периоде.** Интервал описывает случайность симулятора, а не достоверность сценарного спроса или резерва сети.
 
 Повторный расчёт записывайте в `data/` — сохранённый результат в `docs/commission/` останется нетронутым. Сначала соберите образ:
 
@@ -82,9 +82,9 @@ New-Item -ItemType Directory -Force data/benchmark | Out-Null
 docker compose run --rm --no-deps -u 0:0 -v "${repo}:/workspace" -w /workspace/engine engine `
   python -m energy.benchmark `
   --input /workspace/examples/commission_monaco.json `
-  --protocol /workspace/docs/commission/protocol_monaco.json `
-  --protocol-lock /workspace/docs/commission/protocol_monaco.lock.json `
-  --output /workspace/data/benchmark/holdout_rerun.json
+  --protocol /workspace/docs/commission/protocol_monaco_current.json `
+  --protocol-lock /workspace/docs/commission/protocol_monaco_current.lock.json `
+  --output /workspace/data/benchmark/current_rerun.json
 ```
 
 **Linux / WSL:**
@@ -94,9 +94,9 @@ mkdir -p data/benchmark
 docker compose run --rm --no-deps -u "$(id -u):$(id -g)" -v "${PWD}:/workspace" -w /workspace/engine engine \
   python -m energy.benchmark \
   --input /workspace/examples/commission_monaco.json \
-  --protocol /workspace/docs/commission/protocol_monaco.json \
-  --protocol-lock /workspace/docs/commission/protocol_monaco.lock.json \
-  --output /workspace/data/benchmark/holdout_rerun.json
+  --protocol /workspace/docs/commission/protocol_monaco_current.json \
+  --protocol-lock /workspace/docs/commission/protocol_monaco_current.lock.json \
+  --output /workspace/data/benchmark/current_rerun.json
 ```
 
 Протокол сверяет хеш входа и исходников вычислителя, бюджеты, сценарии, дни и seed **до** решения задачи. Если после изменения кода повторный запуск отклоняется, это ожидаемая защита от незаметной подмены эксперимента; для точного повтора используйте указанный в отчёте commit и соответствующий образ. `data/` исключён из Git.

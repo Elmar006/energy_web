@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import datetime
 import hashlib
 
 import pytest
@@ -81,6 +82,71 @@ def test_public_request_survives_when_private_access_is_missing(mobility_spec):
     result = compile_mobility(mobility_spec, MobilityInput.model_validate(source))
     assert len(result["requests"]) == 2
     assert result["spec"]["zones"][0]["hourly_kwh"][10] == pytest.approx(10 / 0.9)
+
+
+def test_earlier_parking_charges_for_later_drive_without_access(mobility_spec):
+    source = _trace()
+    vehicle = source["vehicles"][0]
+    vehicle.update(initial_kwh=10, charging_efficiency=1, population_weight=1)
+    vehicle.pop("population_weight_basis")
+    vehicle["activities"] = [
+        {"kind": "park", "start_at": "2027-05-03T08:00:00+03:00",
+         "end_at": "2027-05-03T09:00:00+03:00", "zone_id": "z1",
+         "private_charger_kw": 7},
+        {"kind": "drive", "start_at": "2027-05-03T09:00:00+03:00",
+         "end_at": "2027-05-03T10:00:00+03:00",
+         "destination_zone_id": "z1", "distance_km": 25},
+        {"kind": "park", "start_at": "2027-05-03T10:00:00+03:00",
+         "end_at": "2027-05-03T11:00:00+03:00", "zone_id": "z1"},
+        {"kind": "drive", "start_at": "2027-05-03T11:00:00+03:00",
+         "end_at": "2027-05-03T12:00:00+03:00",
+         "destination_zone_id": "z1", "distance_km": 50},
+    ]
+    result = compile_mobility(mobility_spec, MobilityInput.model_validate(source))
+    audit = result["audit"]["vehicles"][0]
+    assert result["requests"] == []
+    assert audit["private_metered_kwh"] == pytest.approx(7)
+    assert audit["driving_kwh"] == pytest.approx(15)
+    assert audit["projected_final_kwh"] == pytest.approx(2)
+    assert audit["balance_error_kwh"] == pytest.approx(0)
+
+
+def test_private_then_public_share_one_parking_window_without_overlap(mobility_spec):
+    source = _trace()
+    vehicle = source["vehicles"][0]
+    vehicle.update(initial_kwh=2, charging_efficiency=1, population_weight=1)
+    vehicle.pop("population_weight_basis")
+    vehicle["activities"] = [
+        {"kind": "park", "start_at": "2027-05-03T08:00:00+03:00",
+         "end_at": "2027-05-03T09:00:00+03:00", "zone_id": "z1",
+         "private_charger_kw": 5, "public_allowed": True},
+        {"kind": "drive", "start_at": "2027-05-03T09:00:00+03:00",
+         "end_at": "2027-05-03T10:00:00+03:00",
+         "destination_zone_id": "z1", "distance_km": 75},
+    ]
+    result = compile_mobility(mobility_spec, MobilityInput.model_validate(source))
+    request = result["requests"][0]
+    audit = result["audit"]["vehicles"][0]
+    private_hours = audit["private_metered_kwh"] / 5
+    public_hours = request["energy_from_charger_kwh"] / vehicle["max_charge_kw"]
+    assert private_hours > 0 and public_hours > 0
+    assert private_hours + public_hours <= 1 + 1e-9
+    assert (datetime.fromisoformat(request["arrival_at"]) -
+            datetime.fromisoformat("2027-05-03T08:00:00+03:00")).total_seconds() / 3600 == pytest.approx(private_hours)
+    assert request["soc_before_kwh"] == pytest.approx(2 + audit["private_metered_kwh"])
+    assert audit["private_metered_kwh"] + audit["public_requested_metered_kwh"] == pytest.approx(15)
+    assert audit["projected_final_kwh"] == pytest.approx(2)
+
+
+def test_source_metadata_size_is_validated_before_persistence():
+    trace = _trace()
+    trace["source"] = "x" * 2049
+    with pytest.raises(ValueError, match="2048"):
+        MobilityInput.model_validate(trace)
+    trace = _trace()
+    trace["license"] = "x" * 2049
+    with pytest.raises(ValueError, match="2048"):
+        MobilityInput.model_validate(trace)
 
 
 def test_home_charging_removes_public_request_without_erasing_drive_energy(small_input):
