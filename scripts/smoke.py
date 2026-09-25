@@ -45,6 +45,10 @@ def main() -> None:
     run = call("POST", path, key=idempotency_key)
     repeated = call("POST", path, key=idempotency_key)
     assert repeated["id"] == run["id"], "idempotency broken"
+    assert run["run_spec_origin"] == "resolved"
+    assert run["run_spec"]["simulation_seeds"] == [1, 2, 3]
+    assert run["scenario_sha256"] == scenario["sha256"]
+    assert all(len(run[name]) == 64 for name in ("run_spec_sha256", "execution_sha256"))
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
         current = call("GET", f"/api/v1/runs/{run['id']}")
@@ -55,8 +59,16 @@ def main() -> None:
         raise AssertionError("run did not finish within 180 seconds")
     assert current["state"] == "succeeded", current
     result = call("GET", f"/api/v1/runs/{run['id']}/results")
+    assert result["metadata"]["run_spec"] == run["run_spec"]
+    assert result["metadata"]["scenario_snapshot_sha256"] == run["scenario_sha256"]
+    assert result["metadata"]["run_spec_sha256"] == run["run_spec_sha256"]
+    assert result["metadata"]["execution_sha256"] == run["execution_sha256"]
+    assert len(result["metadata"]["engine_request_sha256"]) == 64
+    assert result["service_acceptance"]["status"] == "not_evaluated"
     assert result["optimization"]["status"] in ("optimal", "feasible"), result
     assert result["optimization"]["verification"]["passed"] is True
+    assert len(result["simulation"]) == (len(spec["scenarios"]) * len(spec["parameters"]["years"])
+                                         * len(run["run_spec"]["simulation_seeds"]))
     assert result["optimization"]["investment_rub_by_year"]
     assert result["optimization"]["service_by_year"]
     assert result["operational_validation"]
@@ -89,6 +101,40 @@ def main() -> None:
                 assert sample["seed"] in result["metadata"]["simulation_seeds"]
         else:
             assert alternative["simulation"] == []
+    custom_spec = {"mode": "exploratory", "simulation_seeds": [17, 19],
+                   "explain_top_n": 0, "alternative_service_fractions": [],
+                   "solver_seconds": 20, "simulation_days": 1}
+    custom_key = str(uuid.uuid4())
+    custom = call("POST", path, {"run_spec": custom_spec}, key=custom_key)
+    same = call("POST", path, {"run_spec": custom_spec}, key=custom_key)
+    assert same["id"] == custom["id"]
+    assert custom["run_spec"]["simulation_seeds"] == [17, 19]
+    assert custom["run_spec"]["simulation_days"] == 1
+    assert custom["run_spec"]["alternative_service_fractions"] == []
+    assert custom["execution_sha256"] != run["execution_sha256"]
+    try:
+        call("POST", path, {"run_spec": {**custom_spec, "simulation_seeds": [17]}}, key=custom_key)
+    except HTTPError as error:
+        assert error.code == 409, error
+    else:
+        raise AssertionError("changed parameters reused idempotency key")
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        current_custom = call("GET", f"/api/v1/runs/{custom['id']}")
+        if current_custom["state"] in ("succeeded", "failed", "cancelled"):
+            break
+        time.sleep(2)
+    else:
+        raise AssertionError("custom run did not finish within 180 seconds")
+    assert current_custom["state"] == "succeeded", current_custom
+    custom_result = call("GET", f"/api/v1/runs/{custom['id']}/results")
+    assert custom_result["metadata"]["run_spec"] == custom["run_spec"]
+    assert custom_result["metadata"]["execution_sha256"] == custom["execution_sha256"]
+    assert custom_result["metadata"]["simulation_seeds"] == [17, 19]
+    assert custom_result["metadata"]["simulation_days"] == 1
+    assert len(custom_result["simulation"]) == (len(spec["scenarios"]) * len(spec["parameters"]["years"])
+                                                * len(custom["run_spec"]["simulation_seeds"]))
+    assert custom_result["explanations"] == [] and custom_result["alternatives"] == []
     corridor = call("POST", "/api/v1/corridors/check", {
         "route_km": 300, "battery_usable_kwh": 60, "initial_soc": 1,
         "reserve_soc": 0.1, "consumption_kwh_per_km": 0.2,

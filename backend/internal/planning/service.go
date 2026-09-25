@@ -25,14 +25,19 @@ type ScenarioSummary struct {
 }
 
 type Run struct {
-	ID          string    `json:"id"`
-	ScenarioID  string    `json:"scenario_id"`
-	State       string    `json:"state"`
-	Attempts    int       `json:"attempts"`
-	ErrorCode   *string   `json:"error_code,omitempty"`
-	ErrorDetail *string   `json:"error_detail,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	RunSpec         RunSpec   `json:"run_spec"`
+	RunSpecSHA256   string    `json:"run_spec_sha256"`
+	ExecutionSHA256 string    `json:"execution_sha256"`
+	ScenarioSHA256  string    `json:"scenario_sha256"`
+	RunSpecOrigin   string    `json:"run_spec_origin"`
+	ID              string    `json:"id"`
+	ScenarioID      string    `json:"scenario_id"`
+	State           string    `json:"state"`
+	Attempts        int       `json:"attempts"`
+	ErrorCode       *string   `json:"error_code,omitempty"`
+	ErrorDetail     *string   `json:"error_detail,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Event struct {

@@ -154,9 +154,55 @@ func (s Server) createRun(w http.ResponseWriter, r *http.Request) {
 	if !validRunOrScenarioID(w, r.PathValue("id")) {
 		return
 	}
-	out, err := s.runs().Start(r.Context(), r.PathValue("id"), r.Header.Get("Idempotency-Key"))
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		fail(w, http.StatusRequestEntityTooLarge, "invalid_run_request", "run request exceeds 16 KiB or cannot be read")
+		return
+	}
+	var in struct {
+		RunSpec json.RawMessage `json:"run_spec"`
+	}
+	if len(strings.TrimSpace(string(raw))) > 0 {
+		if strings.TrimSpace(string(raw))[0] != '{' {
+			fail(w, 400, "invalid_json", "run request must be an object")
+			return
+		}
+		decoder := json.NewDecoder(strings.NewReader(string(raw)))
+		_, _ = decoder.Token() // Opening object was checked above.
+		seen := false
+		for decoder.More() {
+			name, err := decoder.Token()
+			if err != nil || name != "run_spec" || seen {
+				fail(w, 400, "invalid_json", "unknown or repeated field")
+				return
+			}
+			seen = true
+			if err := decoder.Decode(&in.RunSpec); err != nil {
+				fail(w, 400, "invalid_json", "invalid run_spec JSON")
+				return
+			}
+		}
+		if _, err := decoder.Token(); err != nil {
+			fail(w, 400, "invalid_json", "invalid object ending")
+			return
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			fail(w, 400, "invalid_json", "one object required")
+			return
+		}
+	}
+	out, err := s.runs().Start(r.Context(), r.PathValue("id"), r.Header.Get("Idempotency-Key"), in.RunSpec)
 	if errors.Is(err, planning.ErrInvalidKey) {
 		fail(w, 422, "invalid_key", "Idempotency-Key must be 8..128 characters")
+		return
+	}
+	if errors.Is(err, planning.ErrInvalidRunSpec) {
+		fail(w, 422, "invalid_run_spec", err.Error())
+		return
+	}
+	if errors.Is(err, planning.ErrRunSpecConflict) {
+		fail(w, 409, "idempotency_conflict", "Idempotency-Key already identifies a run with different parameters")
 		return
 	}
 	if errors.Is(err, planning.ErrNotFound) {

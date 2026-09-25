@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="444" viewBox="0 0 880 444" role="img" aria-labelledby="title desc">
+  <title id="title">От данных к обоснованному плану</title>
+  <desc id="desc">Данные и происхождение, оптимизация инвестиций, симуляция эксплуатации, решение с ограничениями.</desc>
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17242d"/>
+      <stop offset="1" stop-color="#0d151b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#59e7e8"/>
+      <stop offset="1" stop-color="#1bbbc6"/>
+    </linearGradient>
+    <style>
+      .title{font:600 22px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#f7fafb}
+      .subtitle{font:400 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#aebcc4}
+      .eyebrow{font:600 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;letter-spacing:2.3px;fill:#6be8e9}
+      .num{font:600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#06151b}
+      .icon{fill:none;stroke:#6be8e9;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+  </defs>
+  <rect width="880" height="444" rx="24" fill="#0a1117"/>
+  <path d="M28 25h824" stroke="#1e343d"/>
+  <text x="32" y="50" class="eyebrow">EV INFRASTRUCTURE / DECISION PIPELINE</text>
+
+  <rect x="32" y="76" width="394" height="150" rx="16" fill="url(#panel)" stroke="#27414a"/>
+  <rect x="454" y="76" width="394" height="150" rx="16" fill="url(#panel)" stroke="#27414a"/>
+  <rect x="32" y="252" width="394" height="150" rx="16" fill="url(#panel)" stroke="#27414a"/>
+  <rect x="454" y="252" width="394" height="150" rx="16" fill="url(#panel)" stroke="#27414a"/>
+
+  <rect x="56" y="101" width="27" height="27" rx="8" fill="url(#accent)"/><text x="63" y="120" class="num">01</text>
+  <path class="icon" d="M372 111h25m-25 9h17m-17 9h23"/>
+  <text x="56" y="163" class="title">Данные и источники</text>
+  <text x="56" y="189" class="subtitle">Спрос · дороги · площадки · мощность</text>
+
+  <rect x="478" y="101" width="27" height="27" rx="8" fill="url(#accent)"/><text x="485" y="120" class="num">02</text>
+  <path class="icon" d="M799 127l10-15 10 10 13-18m-33 26h33"/>
+  <text x="478" y="163" class="title">Оптимизация</text>
+  <text x="478" y="189" class="subtitle">Площадки · посты · годы · бюджет</text>
+
+  <rect x="56" y="277" width="27" height="27" rx="8" fill="url(#accent)"/><text x="63" y="296" class="num">04</text>
+  <path class="icon" d="M378 290l9 9 21-22m-29 11v-7h29v23h-29v-6"/>
+  <text x="56" y="339" class="title">Проверяемое решение</text>
+  <text x="56" y="365" class="subtitle">Альтернативы · экономика · допущения</text>
+
+  <rect x="478" y="277" width="27" height="27" rx="8" fill="url(#accent)"/><text x="485" y="296" class="num">03</text>
+  <path class="icon" d="M804 281v25m-12-13h24m-12-12a12 12 0 1 1 0 24"/>
+  <text x="478" y="339" class="title">Симуляция</text>
+  <text x="478" y="365" class="subtitle">Очереди · отказы · энергобаланс</text>
+
+  <path d="M426 150h28M440 136l14 14-14 14M637 226v26M623 238l14 14 14-14M454 326h-28M440 312l-14 14 14 14" fill="none" stroke="#67dfe1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1161,6 +1161,249 @@
         "title": "FleetInput",
         "type": "object"
       },
+      "RunSpec": {
+        "additionalProperties": false,
+        "description": "Fully resolved immutable execution controls, persisted when the run is queued.",
+        "properties": {
+          "schema_version": {
+            "const": "run-spec-v1",
+            "default": "run-spec-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "model_version": {
+            "const": "planner-mip-v3",
+            "default": "planner-mip-v3",
+            "title": "Model Version",
+            "type": "string"
+          },
+          "simulation_version": {
+            "const": "simpy-multiday-v1",
+            "default": "simpy-multiday-v1",
+            "title": "Simulation Version",
+            "type": "string"
+          },
+          "mode": {
+            "default": "exploratory",
+            "enum": [
+              "exploratory",
+              "validation"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "simulation_seeds": {
+            "items": {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Simulation Seeds",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "explain_top_n": {
+            "default": 3,
+            "maximum": 10,
+            "minimum": 0,
+            "title": "Explain Top N",
+            "type": "integer"
+          },
+          "alternative_service_fractions": {
+            "items": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "maxItems": 5,
+            "title": "Alternative Service Fractions",
+            "type": "array",
+            "uniqueItems": true,
+            "description": "Strictly increasing fractions; an empty array disables alternatives."
+          },
+          "alternative_solver_seconds": {
+            "default": 20,
+            "maximum": 60,
+            "minimum": 1,
+            "title": "Alternative Solver Seconds",
+            "type": "integer"
+          },
+          "solver_seconds": {
+            "description": "When omitted, inherits input.parameters.solver_seconds.",
+            "maximum": 3600,
+            "minimum": 1,
+            "title": "Solver Seconds",
+            "type": "integer"
+          },
+          "simulation_days": {
+            "description": "When omitted, inherits input.parameters.simulation_days.",
+            "maximum": 14,
+            "minimum": 1,
+            "title": "Simulation Days",
+            "type": "integer"
+          }
+        },
+        "title": "RunSpec",
+        "type": "object",
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "const": "validation"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "simulation_seeds"
+              ],
+              "properties": {
+                "simulation_seeds": {
+                  "minItems": 30
+                }
+              }
+            }
+          }
+        ],
+        "required": [
+          "schema_version",
+          "model_version",
+          "simulation_version",
+          "mode",
+          "simulation_seeds",
+          "explain_top_n",
+          "alternative_service_fractions",
+          "alternative_solver_seconds",
+          "solver_seconds",
+          "simulation_days"
+        ]
+      },
+      "RunSpecOverrides": {
+        "additionalProperties": false,
+        "description": "Optional execution overrides; omitted solver_seconds/simulation_days inherit the saved scenario. Null fields are rejected. Validation mode requires at least 30 distinct seeds; it does not certify service quality.",
+        "properties": {
+          "schema_version": {
+            "const": "run-spec-v1",
+            "default": "run-spec-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "model_version": {
+            "const": "planner-mip-v3",
+            "default": "planner-mip-v3",
+            "title": "Model Version",
+            "type": "string"
+          },
+          "simulation_version": {
+            "const": "simpy-multiday-v1",
+            "default": "simpy-multiday-v1",
+            "title": "Simulation Version",
+            "type": "string"
+          },
+          "mode": {
+            "default": "exploratory",
+            "enum": [
+              "exploratory",
+              "validation"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "simulation_seeds": {
+            "items": {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Simulation Seeds",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "explain_top_n": {
+            "default": 3,
+            "maximum": 10,
+            "minimum": 0,
+            "title": "Explain Top N",
+            "type": "integer"
+          },
+          "alternative_service_fractions": {
+            "items": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "maxItems": 5,
+            "title": "Alternative Service Fractions",
+            "type": "array",
+            "uniqueItems": true,
+            "description": "Strictly increasing fractions; an empty array disables alternatives."
+          },
+          "alternative_solver_seconds": {
+            "default": 20,
+            "maximum": 60,
+            "minimum": 1,
+            "title": "Alternative Solver Seconds",
+            "type": "integer"
+          },
+          "solver_seconds": {
+            "description": "When omitted, inherits input.parameters.solver_seconds.",
+            "maximum": 3600,
+            "minimum": 1,
+            "title": "Solver Seconds",
+            "type": "integer"
+          },
+          "simulation_days": {
+            "description": "When omitted, inherits input.parameters.simulation_days.",
+            "maximum": 14,
+            "minimum": 1,
+            "title": "Simulation Days",
+            "type": "integer"
+          }
+        },
+        "title": "RunSpecOverrides",
+        "type": "object",
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "const": "validation"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "simulation_seeds"
+              ],
+              "properties": {
+                "simulation_seeds": {
+                  "minItems": 30
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "run_spec": {
+            "$ref": "#/components/schemas/RunSpecOverrides"
+          }
+        }
+      },
       "Error": {
         "type": "object",
         "required": [
@@ -1228,7 +1471,12 @@
         "type": "object",
         "required": [
           "id",
-          "state"
+          "state",
+          "run_spec",
+          "run_spec_sha256",
+          "scenario_sha256",
+          "execution_sha256",
+          "run_spec_origin"
         ],
         "properties": {
           "id": {
@@ -1263,6 +1511,36 @@
               "string",
               "null"
             ]
+          },
+          "run_spec": {
+            "$ref": "#/components/schemas/RunSpec"
+          },
+          "run_spec_origin": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "legacy_inferred"
+            ]
+          },
+          "run_spec_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "scenario_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "execution_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -2092,6 +2370,75 @@
           }
         }
       },
+      "RunMetadata": {
+        "type": "object",
+        "description": "Current calculations include these fields; historical results may omit them.",
+        "properties": {
+          "run_spec": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RunSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "configuration_source": {
+            "type": "string",
+            "enum": [
+              "run_spec",
+              "legacy_fields"
+            ]
+          },
+          "engine_request_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "source_input_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "input_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "scenario_snapshot_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "run_spec_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "execution_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "engine_source_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "engine_source_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "simulation_seeds": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "simulation_days": {
+            "type": "integer"
+          },
+          "solver_seconds": {
+            "type": "integer"
+          }
+        }
+      },
       "PlanResult": {
         "type": "object",
         "required": [
@@ -2106,6 +2453,22 @@
         "properties": {
           "optimization": {
             "$ref": "#/components/schemas/OptimizationResult"
+          },
+          "service_acceptance": {
+            "type": "object",
+            "required": [
+              "status",
+              "reason"
+            ],
+            "description": "Absent in legacy stored results. No formal operational acceptance is implemented in this version.",
+            "properties": {
+              "status": {
+                "const": "not_evaluated"
+              },
+              "reason": {
+                "const": "service_requirements_not_configured"
+              }
+            }
           },
           "simulation": {
             "type": "array",
@@ -2138,7 +2501,7 @@
             }
           },
           "metadata": {
-            "type": "object"
+            "$ref": "#/components/schemas/RunMetadata"
           }
         }
       },
@@ -3077,6 +3440,17 @@
     "/api/v1/scenarios/{id}/runs": {
       "post": {
         "summary": "Queue idempotent calculation",
+        "description": "An empty body or {} keeps legacy defaults. The resolved RunSpec is stored with the run. Reusing the key with different resolved parameters returns 409.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "name": "id",
@@ -3109,8 +3483,38 @@
               }
             }
           },
+          "400": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency key already used with different parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request exceeds 16 KiB",
             "content": {
               "application/json": {
                 "schema": {

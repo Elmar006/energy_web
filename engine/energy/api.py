@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 import base64
 import binascii
@@ -10,8 +9,8 @@ from importlib.metadata import version
 from typing import Literal
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field, model_validator
+from fastapi import Depends, FastAPI, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .contracts import PlanningInput
 from .ingest_grid import TRANSFORM_VERSION as GRID_TRANSFORM_VERSION, apply_grid_profile
@@ -21,6 +20,7 @@ from .alternatives import calculate_alternatives
 from .corridor import CorridorInput, check_corridor
 from .fleet import FleetInput, schedule_fleet
 from .optimizer import solve
+from .run_spec import RunSpec, engine_source_manifest, input_sha256
 from .simulation import simulate
 from .validation import compare_economics, compare_operations, describe_input_quality
 
@@ -28,11 +28,26 @@ app = FastAPI(title="Energy planning engine", version="1.0.0", docs_url=None, re
 
 
 class CalculationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     input: PlanningInput
+    run_spec: RunSpec | None = None
     simulation_seeds: list[int] = Field(default_factory=lambda: [1, 2, 3], max_length=30)
     explain_top_n: int = Field(default=0, ge=0, le=10)
     alternative_service_fractions: list[float] = Field(default_factory=lambda: [0.0, 0.5, 1.0], max_length=5)
     alternative_solver_seconds: int = Field(default=20, ge=1, le=60)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_ambiguous_configuration(cls, value):
+        if isinstance(value, dict) and "run_spec" in value:
+            if value["run_spec"] is None:
+                raise ValueError("run_spec must be an object when supplied")
+            legacy_fields = {"simulation_seeds", "explain_top_n", "alternative_service_fractions",
+                             "alternative_solver_seconds"}
+            if legacy_fields.intersection(value):
+                raise ValueError("run_spec cannot be combined with legacy execution fields")
+        return value
 
     @model_validator(mode="after")
     def validate_alternative_targets(self):
@@ -41,6 +56,8 @@ class CalculationRequest(BaseModel):
             raise ValueError("alternative_service_fractions must be unique, sorted values in [0,1]")
         if any(seed < 0 for seed in self.simulation_seeds) or len(set(self.simulation_seeds)) != len(self.simulation_seeds):
             raise ValueError("simulation_seeds must be unique nonnegative integers")
+        if self.run_spec is not None:
+            self.run_spec = self.run_spec.resolve(self.input)
         return self
 
 
@@ -127,29 +144,46 @@ def fleet_schedule(request: FleetInput):
     return schedule_fleet(request)
 
 
+async def _calculation_request_sha256(request: Request) -> str:
+    # Bind the computed result to the exact HTTP payload received by FastAPI,
+    # before Pydantic normalizes defaults, floating-point values or key order.
+    return hashlib.sha256(await request.body()).hexdigest()
+
+
 @app.post("/v1/calculate")
-def calculate(request: CalculationRequest):
-    result = solve(request.input)
-    canonical = json.dumps(request.input.model_dump(mode="json"), ensure_ascii=False,
-                           sort_keys=True, separators=(",", ":")).encode("utf-8")
+def calculate(request: CalculationRequest, request_sha256: str = Depends(_calculation_request_sha256)):
+    settings = request.run_spec if request.run_spec is not None else request
+    spec = request.run_spec.apply(request.input) if request.run_spec is not None else request.input
+    result = solve(spec)
+    source_digest, source_files = engine_source_manifest()
     output = {"optimization": result.as_dict(), "simulation": [], "operational_validation": [],
               "operational_economics": [],
               "explanations": [], "alternatives": [],
+              "service_acceptance": {"status": "not_evaluated",
+                                     "reason": "service_requirements_not_configured"},
               "metadata": {"model_version": "planner-mip-v3", "simulation_version": "simpy-multiday-v1",
-                           "input_sha256": hashlib.sha256(canonical).hexdigest(),
+                           "run_spec": request.run_spec.model_dump(mode="json") if request.run_spec is not None else None,
+                           "configuration_source": "run_spec" if request.run_spec is not None else "legacy_fields",
+                           "engine_request_sha256": request_sha256,
+                           "source_input_sha256": input_sha256(request.input),
+                           "input_sha256": input_sha256(spec),
+                           "engine_source_sha256": source_digest,
+                           "engine_source_files": source_files,
                            "python_version": sys.version.split()[0], "pyomo_version": version("pyomo"),
                            "highspy_version": version("highspy"), "simpy_version": version("simpy"),
-                           "numpy_version": version("numpy"), "simulation_seeds": request.simulation_seeds,
-                           "simulation_days": request.input.parameters.simulation_days,
-                           "input_quality": describe_input_quality(request.input),
-                           "alternative_service_fractions": request.alternative_service_fractions,
-                           "alternative_solver_seconds": request.alternative_solver_seconds}}
+                           "numpy_version": version("numpy"), "simulation_seeds": settings.simulation_seeds,
+                           "simulation_days": spec.parameters.simulation_days,
+                           "solver_seconds": spec.parameters.solver_seconds,
+                           "explain_top_n": settings.explain_top_n,
+                           "input_quality": describe_input_quality(spec),
+                           "alternative_service_fractions": settings.alternative_service_fractions,
+                           "alternative_solver_seconds": settings.alternative_solver_seconds}}
     if result.status not in ("optimal", "feasible"):
         return output
-    for scenario in request.input.scenarios:
-        for year in request.input.parameters.years:
-            for seed in request.simulation_seeds:
-                run = simulate(request.input, result.selected, year=year,
+    for scenario in spec.scenarios:
+        for year in spec.parameters.years:
+            for seed in settings.simulation_seeds:
+                run = simulate(spec, result.selected, year=year,
                                scenario_id=scenario.id, seed=seed,
                                grid_upgrades=result.grid_upgrades,
                                battery=result.battery, solar=result.solar)
@@ -157,10 +191,10 @@ def calculate(request: CalculationRequest):
                     raise HTTPException(status_code=500, detail="operational dispatch failed physical verification")
                 output["simulation"].append(run)
     output["operational_validation"] = compare_operations(result, output["simulation"])
-    output["operational_economics"] = compare_economics(request.input, result, output["simulation"])
-    if request.explain_top_n:
-        output["explanations"] = explain_selected_sites(request.input, result, request.explain_top_n)
-    if request.alternative_service_fractions:
-        output["alternatives"] = calculate_alternatives(request.input, request.alternative_service_fractions,
-                                                         request.simulation_seeds, request.alternative_solver_seconds)
+    output["operational_economics"] = compare_economics(spec, result, output["simulation"])
+    if settings.explain_top_n:
+        output["explanations"] = explain_selected_sites(spec, result, settings.explain_top_n)
+    if settings.alternative_service_fractions:
+        output["alternatives"] = calculate_alternatives(spec, settings.alternative_service_fractions,
+                                                       settings.simulation_seeds, settings.alternative_solver_seconds)
     return output
