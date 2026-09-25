@@ -1,0 +1,3 @@
+# Benchmark provenance hashes Python source bytes. Keep their line endings
+# identical in Windows, WSL and Linux checkouts.
+engine/energy/*.py text eol=lf
