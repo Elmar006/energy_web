@@ -10,14 +10,15 @@ import (
 
 	"github.com/Elmar006/energy_web/backend/internal/api"
 	"github.com/Elmar006/energy_web/backend/internal/artifact"
+	"github.com/Elmar006/energy_web/backend/internal/config"
 	"github.com/Elmar006/energy_web/backend/internal/store"
 	"github.com/redis/go-redis/v9"
 )
 
 func main() {
 	token := os.Getenv("API_TOKEN")
-	if len(token) < 24 {
-		slog.Error("API_TOKEN must be at least 24 bytes")
+	if err := config.ValidateAPIToken(token, os.Getenv("APP_ENV"), os.Getenv("ALLOW_INSECURE_DEMO_TOKEN")); err != nil {
+		slog.Error("API_TOKEN configuration", "error", err)
 		os.Exit(1)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
