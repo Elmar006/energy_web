@@ -181,6 +181,7 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                 deadline_minute: float | None = None,
                 max_vehicle_kw: float | None = None):
         nonlocal last_completion, requested_energy_kwh
+        nonlocal rerouted_arrivals, rerouted_served
         yield env.timeout(max(0, arrived - env.now))
         arrivals[zone.id] += 1
         arrival_day = local_day(env.now)
@@ -188,54 +189,76 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
         arrivals_by_hour[hour] += 1
         arrivals_by_day_hour[arrival_day][hour] += 1
         requested_energy_kwh += requested
-        eligible = []
-        for sid, option in active.items():
-            minutes = travel.get((zone.id, sid))
-            if minutes is None or minutes > zone.max_travel_minutes or zone.group not in option.allowed_groups:
+        current_site = None
+        travel_spent = 0.0
+        tried = set()
+        for attempt in range(max_reroutes + 1):
+            if env.now >= horizon_minutes or (deadline_minute is not None and env.now >= deadline_minute):
+                break
+            hour = local_hour(env.now)
+            eligible = []
+            for sid, option in active.items():
+                if sid in tried or zone.group not in option.allowed_groups:
+                    continue
+                minutes = (travel.get((zone.id, sid)) if current_site is None else
+                           site_travel.get((current_site, sid)))
+                if (minutes is None or travel_spent + minutes > zone.max_travel_minutes or
+                        env.now + minutes >= horizon_minutes or
+                        (deadline_minute is not None and env.now + minutes >= deadline_minute) or
+                        site_down(sid, env.now + minutes)):
+                    continue
+                station = supply[sid]
+                pv = station.pv_kw * params.pv_hourly_factor[hour] * scenario.pv_multiplier
+                storage = min(station.battery_kwh / params.storage_max_hours,
+                              station.soc_kwh * params.storage_efficiency * 60)
+                grid = min(option.connection_kw / option.ports,
+                           headroom(station.node_id, hour) / node_ports[station.node_id])
+                estimated_power = min(option.charger_kw, grid + (pv + storage) / option.ports,
+                                      max_vehicle_kw or option.charger_kw)
+                if estimated_power <= 1e-9:
+                    continue
+                resource = resources[sid]
+                queue_delay = len(resource.queue) * requested / estimated_power * 60 / option.ports
+                eligible.append((minutes + queue_delay, sid, minutes))
+            if not eligible:
+                break
+            _, sid, travel_minutes = min(eligible)
+            if attempt:
+                rerouted_arrivals += 1
+            yield env.timeout(travel_minutes)
+            travel_spent += travel_minutes
+            current_site = sid
+            tried.add(sid)
+            if site_down(sid, env.now):
                 continue
-            station = supply[sid]
-            pv = station.pv_kw * params.pv_hourly_factor[hour] * scenario.pv_multiplier
-            storage = min(station.battery_kwh / params.storage_max_hours,
-                          station.soc_kwh * params.storage_efficiency * 60)
-            grid = min(option.connection_kw / option.ports,
-                       headroom(station.node_id, hour) / node_ports[station.node_id])
-            estimated_power = min(option.charger_kw, grid + (pv + storage) / option.ports,
-                                  max_vehicle_kw or option.charger_kw)
-            if estimated_power <= 1e-9:
-                continue
-            resource = resources[sid]
-            queue_delay = len(resource.queue) * requested / estimated_power * 60 / option.ports
-            eligible.append((minutes + queue_delay, sid, minutes))
-        if not eligible:
-            refused[zone.id] += 1
-            return
-        _, sid, travel_minutes = min(eligible)
-        yield env.timeout(travel_minutes)
-        if env.now >= horizon_minutes or (deadline_minute is not None and env.now >= deadline_minute):
-            refused[zone.id] += 1
-            return
-        station = resources[sid]
-        queued_at = env.now
-        with station.request() as request:
-            patience = min(45, horizon_minutes - env.now,
-                           deadline_minute - env.now if deadline_minute is not None else 45)
-            response = yield request | env.timeout(patience)
-            if (request not in response or env.now >= horizon_minutes or
-                    (deadline_minute is not None and env.now >= deadline_minute)):
-                refused[zone.id] += 1
+            station = resources[sid]
+            queued_at = env.now
+            with station.request() as reservation:
+                patience = min(45, horizon_minutes - env.now,
+                               deadline_minute - env.now if deadline_minute is not None else 45)
+                if patience <= 0:
+                    continue
+                response = yield reservation | env.timeout(patience)
+                if (reservation not in response or site_down(sid, env.now) or
+                        env.now >= horizon_minutes or
+                        (deadline_minute is not None and env.now >= deadline_minute)):
+                    continue
+                waits.append(env.now - queued_at)
+                session = _Session(zone.id, requested, env.event(), max_vehicle_kw,
+                                   deadline_minute)
+                in_charge[sid].append(session)
+                completed = yield session.done
+                if completed:
+                    served[zone.id] += 1
+                    energy[sid] += session.delivered_kwh
+                    last_completion = max(last_completion, env.now)
+                    if attempt:
+                        rerouted_served += 1
+                else:
+                    refused[zone.id] += 1
+                    partial_energy[sid] += session.delivered_kwh
                 return
-            waits.append(env.now - queued_at)
-            session = _Session(zone.id, requested, env.event(), max_vehicle_kw,
-                               deadline_minute)
-            in_charge[sid].append(session)
-            completed = yield session.done
-            if completed:
-                served[zone.id] += 1
-                energy[sid] += session.delivered_kwh
-                last_completion = max(last_completion, env.now)
-            else:
-                refused[zone.id] += 1
-                partial_energy[sid] += session.delivered_kwh
+        refused[zone.id] += 1
 
     def dispatcher():
         nonlocal max_balance_error, max_node_overload, max_connection_overload
@@ -247,7 +270,10 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                 yield env.timeout(minute - env.now)
             hour = local_hour(minute)
             absolute_hour = minute // 60
-            demand = {sid: sum(min(active[sid].charger_kw,
+            for sid in supply:
+                if site_down(sid, minute):
+                    outage_station_minutes[sid] += 1
+            demand = {sid: 0.0 if site_down(sid, minute) else sum(min(active[sid].charger_kw,
                                    session.max_vehicle_kw or active[sid].charger_kw,
                                    session.remaining_kwh * 60,
                                    (session.max_vehicle_kw or active[sid].charger_kw) *
@@ -260,8 +286,9 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                                     pv_factor=params.pv_hourly_factor[hour] * scenario.pv_multiplier,
                                     efficiency=params.storage_efficiency,
                                     storage_max_hours=params.storage_max_hours,
-                                    grid_charge_allowed={sid: grid_charge_hours[sid][absolute_hour]
-                                                         for sid in supply})
+                                     grid_charge_allowed={sid: (grid_charge_hours[sid][absolute_hour]
+                                                               and not site_down(sid, minute))
+                                                          for sid in supply})
             for node_id, limit in node_limits.items():
                 draw = sum(flow.grid_kw for sid, flow in flows.items()
                            if supply[sid].node_id == node_id)
@@ -405,6 +432,11 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
         "calendar_covered_dates": ([day.isoformat() for day in spec.service_calendar.covered_dates]
                                    if horizon else None),
         "arrival_stream_sha256": arrival_stream_sha256,
+        "rerouted_arrivals": rerouted_arrivals,
+        "rerouted_served_sessions": rerouted_served,
+        "outage_station_minutes": dict(sorted(outage_station_minutes.items())),
+        "outage_source": ("planning_input" if outages is None and configured_outages else
+                          "override" if outages is not None else "none"),
         "arrivals": sum(arrivals.values()), "served_sessions": sum(served.values()),
         "refused_sessions": sum(refused.values()),
         "arrivals_by_hour": arrivals_by_hour,
@@ -430,6 +462,8 @@ def simulate(spec: PlanningInput, selected: list[dict], *, year: int, scenario_i
                         "PV serves vehicles before charging batteries; grid fills demand before batteries discharge",
                         "spare PV and then spare grid charge batteries; grid sharing is max-min fair",
                         "grid charging of storage is enabled only before forecast hours with direct-supply shortfall",
+                        "rerouting requires an explicit directed site_travel_edge and the remaining travel and charging window; at most one reroute by default",
+                        "deterministic outage intervals pause charger service until repair; connected vehicles retain their ports while paused",
                         ("dated request arrivals/deadlines are replayed; fractional population weights and demand multipliers use seeded stochastic rounding; explicitly marked legacy zones repeat their profile"
                          if horizon else
                          "the same representative-day demand profile repeats independently each day; no day-of-week, seasonal or AC power-flow validation")],

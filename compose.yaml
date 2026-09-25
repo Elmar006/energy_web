@@ -56,6 +56,8 @@ services:
     environment:
       DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:-energy_dev}@db:5432/energy?sslmode=disable
       API_TOKEN: ${API_TOKEN:-local-development-token-change-before-deploy}
+      APP_ENV: ${APP_ENV:-development}
+      ALLOW_INSECURE_DEMO_TOKEN: ${ALLOW_INSECURE_DEMO_TOKEN:-1}
       API_ADDR: :8080
       REDIS_ADDR: redis:6379
       ENGINE_URL: http://engine:8090
