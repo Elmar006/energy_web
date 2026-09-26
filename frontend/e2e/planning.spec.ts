@@ -80,7 +80,8 @@ test("мобильный сценарий доступен от входа до 
   await expect(page.getByRole("heading", { name: "Энергетический аудит" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Работа сети по дням" })).toBeVisible();
   await expect(page.getByText("Спрос задан предположениями, а не измерен.")).toBeVisible();
-  await expect(page.getByRole("table")).toHaveCount(3);
+  await expect(page.getByRole("region", { name: "Сравнение планов" }).getByRole("table")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Энергетический аудит по площадкам" }).getByRole("table")).toBeVisible();
   await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   await page.getByRole("button", { name: "Выйти из рабочего пространства" }).click();

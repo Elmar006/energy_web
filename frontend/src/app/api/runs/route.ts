@@ -29,9 +29,10 @@ export async function POST(request: Request) {
     }
     const run = await callBackend(`/api/v1/scenarios/${scenarioID}/runs`, {
       method: "POST", headers: { "Idempotency-Key": randomUUID() },
+      ...(input?.run_spec ? { body: JSON.stringify({ run_spec: input.run_spec }) } : {}),
     });
-    if (run.status !== 202) return Response.json({ error: "Не удалось запустить расчёт" }, { status: 502 });
-    return Response.json({ run_id: run.body.id, scenario_id: scenarioID }, { status: 202 });
+    if (run.status !== 202) return Response.json({ error: run.body?.detail || "Не удалось запустить расчёт" }, { status: [409, 413, 422].includes(run.status) ? run.status : 502 });
+    return Response.json({ run_id: run.body.id, scenario_id: scenarioID, run: run.body }, { status: 202 });
   } catch {
     return Response.json({ error: "Расчётный сервис недоступен" }, { status: 503 });
   }
