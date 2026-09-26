@@ -1,0 +1,39 @@
+"use client";
+
+type YearService = { scenario_id: string; year: number; demand_kwh: number; served_kwh: number; unmet_kwh: number };
+type Investment = { year: number; rub: number };
+type Economics = { scenario_id: string; optimized_npv_rub: number; simulated_npv_rub_mean: number; simulated_npv_rub_min: number; simulated_npv_rub_max: number; optimism_gap_rub: number; profitability_sign_changed: boolean };
+type Metric = { status?: string; threshold?: number; mean?: number; lower_95?: number; upper_95?: number; reason?: string };
+type Acceptance = { status: string; reason: string; conditions?: { scenario_id: string; year: number; status?: string; metrics?: Record<string, Metric> }[] };
+type Iteration = { iteration?: number; status?: string; reason?: string; selected_for_holdout?: boolean; forced_site_id?: string; optimization_status?: string };
+type InsightsResult = {
+  optimization: { status: string; gap?: number | null; objective?: number | null; service_by_year?: YearService[]; investment_rub_by_year?: Investment[] };
+  operational_economics?: Economics[];
+  service_acceptance?: Acceptance;
+  improvement?: { method?: string; holdout_seeds_used_for_selection?: boolean; iterations?: Iteration[] };
+};
+type Run = { run_spec?: { schema_version: string; mode: string; simulation_seeds: number[]; development_seeds?: number[]; simulation_days: number; model_version: string }; scenario_sha256?: string; run_spec_sha256?: string; execution_sha256?: string; run_spec_origin?: string };
+const numeric = (value: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value);
+const rub = (value: number) => numeric(value / 1_000_000) + " млн ₽";
+const statusLabel: Record<string, string> = { accepted: "Порог пройден", rejected: "Порог не пройден", inconclusive: "Данных недостаточно", not_evaluated: "Пороги не заданы" };
+const metricLabel: Record<string, string> = { energy_fraction: "Энергия", session_fraction: "Сессии", refusal_fraction: "Отказы", mean_seed_p95_wait_minutes: "p95 ожидания, мин" };
+const metricValue = (key: string, value?: number) => value === undefined ? "—" : key.includes("fraction") ? numeric(value * 100) + "%" : numeric(value);
+
+export default function ResultInsights({ result, run }: { result: InsightsResult; run: Run | null }) {
+  const acceptance = result.service_acceptance;
+  const service = result.optimization.service_by_year || [];
+  const investment = result.optimization.investment_rub_by_year || [];
+  const economics = result.operational_economics || [];
+  const iterations = result.improvement?.iterations || [];
+  return <div className="insights">
+    <div className="insight-grid">
+      <section className="detail-card insight-card"><div className="detail-title"><h3>Три статуса расчёта</h3></div><dl className="insight-status"><div><dt>Задача</dt><dd>Результат сохранён</dd></div><div><dt>Математическая модель</dt><dd>{result.optimization.status === "optimal" ? "Оптимум в заданной области" : "Допустимый план"}</dd></div><div><dt>Сценарная приёмка</dt><dd className={"acceptance-" + (acceptance?.status || "none")}>{statusLabel[acceptance?.status || ""] || "Не оценена"}</dd></div></dl>{result.optimization.gap != null && <p className="insight-hint">Разрыв решателя: {numeric(result.optimization.gap * 100)}%</p>}{acceptance?.reason && <p className="insight-hint">Основание: {acceptance.reason}</p>}<p className="insight-hint">Проверка относится к сценарным потокам и переданным кандидатам. Она не подтверждает техусловия подключения или спрос города.</p></section>
+      <section className="detail-card insight-card"><div className="detail-title"><h3>Протокол запуска</h3></div><dl className="insight-status"><div><dt>Спецификация</dt><dd>{run?.run_spec?.schema_version || "—"}</dd></div><div><dt>Режим</dt><dd>{run?.run_spec?.mode || "—"}</dd></div><div><dt>Итоговых seed</dt><dd>{run?.run_spec?.simulation_seeds?.length ?? "—"}</dd></div><div><dt>Дней SimPy</dt><dd>{run?.run_spec?.simulation_days ?? "—"}</dd></div><div><dt>Происхождение</dt><dd>{run?.run_spec_origin === "legacy_inferred" ? "Восстановлено из старого запуска" : "Сохранено при запуске"}</dd></div></dl>{run?.execution_sha256 && <p className="insight-hash">Хеш входа и настроек: <code>{run.execution_sha256}</code></p>}</section>
+    </div>
+    {service.length > 0 && <section className="detail-card"><div className="detail-title"><h3>Обслуживание по годам и сценариям</h3><span className="small-caption">MILP · кВт·ч за модельный горизонт</span></div><div className="year-grid">{service.map((item) => { const rate = item.demand_kwh > 0 ? item.served_kwh / item.demand_kwh * 100 : 0; return <div className="year-row" key={item.scenario_id + item.year}><div><strong>{item.scenario_id} · {item.year}</strong><b>{numeric(rate)}%</b></div><span className="year-track"><i style={{ width: Math.max(0, Math.min(100, rate)) + "%" }} /></span><small>{numeric(item.served_kwh)} из {numeric(item.demand_kwh)} кВт·ч · дефицит {numeric(item.unmet_kwh)} кВт·ч</small></div>; })}</div></section>}
+    {investment.length > 0 && <section className="detail-card"><div className="detail-title"><h3>Этапы инвестиций</h3><span className="small-caption">CAPEX по году расходов</span></div><div className="investment-grid">{investment.map((item) => <div key={item.year}><strong>{item.year}</strong><span>{rub(item.rub)}</span></div>)}</div></section>}
+    {economics.length > 0 && <section className="detail-card"><div className="detail-title"><h3>Экономика после симуляции</h3><span className="small-caption">Сценарный NPV · короткий период экстраполирован на год</span></div><div className="data-table-scroll"><table className="data-table"><thead><tr><th>Сценарий</th><th>MILP</th><th>SimPy, среднее</th><th>Диапазон seed</th><th>Риск знака</th></tr></thead><tbody>{economics.map((item) => <tr key={item.scenario_id}><th>{item.scenario_id}</th><td>{rub(item.optimized_npv_rub)}</td><td>{rub(item.simulated_npv_rub_mean)}</td><td>{rub(item.simulated_npv_rub_min)} … {rub(item.simulated_npv_rub_max)}</td><td className={item.profitability_sign_changed ? "risk-text" : ""}>{item.profitability_sign_changed ? "Знак доходности меняется" : "Нет"}</td></tr>)}</tbody></table></div></section>}
+    {Boolean(acceptance?.conditions?.length) && <section className="detail-card"><div className="detail-title"><h3>Итоговая приёмка по условиям</h3><span className="small-caption">95% интервал отражает случайность модели</span></div><div className="condition-grid">{acceptance?.conditions?.map((item) => <div key={item.scenario_id + item.year}><strong>{item.scenario_id} · {item.year}</strong><span>{statusLabel[item.status || ""] || item.status || "—"}</span>{Object.entries(item.metrics || {}).map(([key, metric]) => <div className="condition-metric" key={key}><b>{metricLabel[key] || key}</b><span>{metricValue(key, metric.mean)} · интервал {metricValue(key, metric.lower_95)}…{metricValue(key, metric.upper_95)}</span><small>Порог {metricValue(key, metric.threshold)} · {statusLabel[metric.status || ""] || metric.status || metric.reason || "—"}</small></div>)}</div>)}</div></section>}
+    {iterations.length > 0 && <section className="detail-card"><div className="detail-title"><h3>Подбор варианта</h3><span className="small-caption">Разработочные потоки отделены от итоговых seed</span></div><ol className="improvement-list">{iterations.map((item, index) => <li key={index}><strong>Итерация {item.iteration ?? index + 1}</strong><span>{item.forced_site_id || "Без добавленной площадки"} · {item.optimization_status || item.status || "—"}{item.selected_for_holdout ? " · выбран для итоговой проверки" : ""}</span>{item.reason && <small>{item.reason}</small>}</li>)}</ol></section>}
+  </div>;
+}
