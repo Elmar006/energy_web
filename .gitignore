@@ -15,3 +15,4 @@ examples/grid_local.json
 examples/monaco_road_local.json
 examples/monaco_input_local.json
 data/
+!frontend/src/app/data/
