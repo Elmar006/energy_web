@@ -36,14 +36,14 @@ export default function MobilitySection() {
             поставщик.
           </p>
           <p className="wb-help">
-            Зоны: {spec.zones.map((item) => item.id).join(", ")}. Время с
+            Зоны: {(spec?.zones ?? []).map((item) => item.id).join(", ")}. Время с
             UTC-смещением, расстояние в км, энергия в кВт·ч. Укажите
             covered_dates, replace_zone_ids, источник, машины и активности.
           </p>
           <MobilityFields
             value={mobilityJson}
             onChange={setMobilityJson}
-            zones={spec.zones.map((item) => item.id)}
+            zones={(spec?.zones ?? []).map((item) => item.id)}
           />
           <details className="wb-advanced">
             <summary>Машины, поездки и стоянки · полный JSON</summary>

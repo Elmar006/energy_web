@@ -87,7 +87,7 @@ func (s Server) Handler() http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.URL.Path != "/healthz" && r.URL.Path != "/readyz" {
 			supplied := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if len(supplied) != len(s.Token) || subtle.ConstantTimeCompare([]byte(supplied), []byte(s.Token)) != 1 {
+			if s.Token == "" || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || len(supplied) != len(s.Token) || subtle.ConstantTimeCompare([]byte(supplied), []byte(s.Token)) != 1 {
 				fail(w, 401, "unauthorized", "valid bearer token required")
 				return
 			}

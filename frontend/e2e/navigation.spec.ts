@@ -33,11 +33,8 @@ test("разделы и вложенные вкладки открываются
   await page.evaluate(() => {
     (window as typeof window & { workspaceDocumentMarker?: number }).workspaceDocumentMarker = 1;
   });
-  const budget = page.getByRole("slider", { name: /Инвестиционный бюджет/ });
-  await budget.focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(budget).toHaveValue("11");
-
+  await expect(page.getByRole("heading", { name: "Данные не загружены" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Рассчитать план" })).toBeDisabled();
   await page.getByRole("combobox", { name: "Источник расчёта" }).click();
   await expect(
     page.getByRole("listbox", { name: "Источник расчёта" }),
@@ -62,7 +59,7 @@ test("разделы и вложенные вкладки открываются
   await expect(page).toHaveURL(/\/models\/corridor$/);
   await page.getByRole("link", { name: "Парк" }).click();
   await expect(page).toHaveURL(/\/models\/fleet$/);
-  await expect(page.getByRole("slider", { name: /Инвестиционный бюджет/ })).toHaveValue("11");
+  await expect(page.getByRole("slider", { name: /Инвестиционный бюджет/ })).toHaveCount(0);
   expect(
     await page.evaluate(
       () =>
@@ -73,6 +70,9 @@ test("разделы и вложенные вкладки открываются
 
   await page.goBack();
   await expect(page).toHaveURL(/\/models\/corridor$/);
+  await page.getByRole("link", { name: "Планирование", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Данные не загружены" })).toBeVisible();
+  await page.goBack();
   expect(sessionChecks).toBe(1);
   await page.reload();
   await expect(page.getByRole("link", { name: "Коридор" })).toHaveAttribute(

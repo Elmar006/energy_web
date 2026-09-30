@@ -22,15 +22,21 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
   });
 }
 
-export default function PlanningMap({ selected, sites, zones }: { selected?: Selection[]; sites: MapSite[]; zones: MapZone[] }) {
+export default function PlanningMap({ selected, sites, zones, activeSiteId, onSelectSite }: { selected?: Selection[]; sites: MapSite[]; zones: MapZone[]; activeSiteId?: string; onSelectSite?: (id: string) => void }) {
   const holder = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapGLMap | null>(null);
   const [status, setStatus] = useState<MapStatus>("loading");
   const [active, setActive] = useState<Point | null>(null);
+  const selectSiteRef = useRef(onSelectSite);
+  useEffect(() => { selectSiteRef.current = onSelectSite; }, [onSelectSite]);
+  useEffect(() => {
+    const site = sites.find(s => s.id === activeSiteId);
+    if (site && mapRef.current) mapRef.current.setCenter([site.longitude, site.latitude]);
+  }, [activeSiteId, sites]);
   const bySite = useMemo(() => new Map((selected ?? []).map((item) => [item.site_id, item])), [selected]);
   const points = useMemo(() => [...sites, ...zones], [sites, zones]);
   const center = useMemo<[number, number]>(() => {
-    if (!points.length) return [60.606, 56.829];
+    if (!points.length) return [0, 0];
     return [points.reduce((sum, point) => sum + point.longitude, 0) / points.length,
       points.reduce((sum, point) => sum + point.latitude, 0) / points.length];
   }, [points]);
@@ -71,8 +77,8 @@ export default function PlanningMap({ selected, sites, zones }: { selected?: Sel
           marker.title = `${site.name} · ${selection ? `выбрана, ввод ${selection.year}` : "кандидат"}`;
           marker.setAttribute("aria-label", marker.title);
           marker.textContent = site.name.split(" · ")[0].replace("Площадка ", "");
-          marker.onclick = () => setActive({ id: site.id, name: site.name, kind: "site",
-            subtitle: selection ? `${selection.option_id.toUpperCase()} · ввод ${selection.year}` : "Площадка-кандидат" });
+          marker.onclick = () => { selectSiteRef.current?.(site.id); setActive({ id: site.id, name: site.name, kind: "site",
+            subtitle: selection ? `${selection.option_id.toUpperCase()} · ввод ${selection.year}` : "Площадка-кандидат" }); };
           new api.HtmlMarker(map, { coordinates: [site.longitude, site.latitude], html: marker,
             interactive: true, zIndex: selection ? 3 : 2 });
         }

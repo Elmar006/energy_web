@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import localFont from "next/font/local";
 import { WorkspaceProvider } from "@/components/workspace/workspace-state";
 import "./globals.css";
+import "./engineering.css";
 
 const onest = localFont({
   src: "../../public/onest-variable.ttf",
@@ -23,7 +25,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className={onest.variable}>
       <body>
-        <WorkspaceProvider>{children}</WorkspaceProvider>
+        <Suspense fallback={<p role="status">Открываем рабочее пространство…</p>}><WorkspaceProvider>{children}</WorkspaceProvider></Suspense>
       </body>
     </html>
   );

@@ -10,11 +10,18 @@ const LocalDemoToken = "local-development-token-change-before-deploy"
 var ErrInsecureAPIToken = errors.New("API_TOKEN is missing, a placeholder, or unsafe for this environment")
 
 // ValidateAPIToken refuses the Compose demo credential unless the operator
-// explicitly opts into local development mode. APP_ENV empty follows the
-// stricter deployment path; it cannot silently permit a default credential.
-func ValidateAPIToken(token, appEnv, allowInsecureDemo string) error {
-	if appEnv != "" && appEnv != "development" && appEnv != "test" && appEnv != "production" {
+// explicitly opts into local development mode. The environment is mandatory:
+// an omitted APP_ENV must not bypass production database checks.
+func ValidateEnvironment(appEnv string) error {
+	if appEnv != "development" && appEnv != "test" && appEnv != "production" {
 		return errors.New("APP_ENV must be development, test, or production")
+	}
+	return nil
+}
+
+func ValidateAPIToken(token, appEnv, allowInsecureDemo string) error {
+	if err := ValidateEnvironment(appEnv); err != nil {
+		return err
 	}
 	if token == LocalDemoToken {
 		if appEnv == "development" && allowInsecureDemo == "1" {

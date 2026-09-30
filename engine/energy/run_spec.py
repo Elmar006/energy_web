@@ -122,6 +122,11 @@ def input_sha256(planning_input: PlanningInput) -> str:
         snapshot.pop("service_calendar", None)
         if not snapshot.get("charging_requests"):
             snapshot.pop("charging_requests", None)
+    # Empty additive operational inputs do not change legacy behaviour. Keep
+    # historical identities stable; actual transfer edges/outages remain hashed.
+    for key in ("site_travel_edges", "operational_outages"):
+        if not snapshot.get(key):
+            snapshot.pop(key, None)
     canonical = json.dumps(snapshot, ensure_ascii=False,
                            sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()

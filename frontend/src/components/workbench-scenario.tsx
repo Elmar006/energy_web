@@ -22,9 +22,7 @@ export default function ScenarioSection() {
       {section === "editor" && (
         <div className="wb-body">
           <p className="wb-note">
-            <Info size={17} /> Полный PlanningInput. Отредактируйте значения и
-            происхождение; сервер проверит контракт и создаст новый неизменяемый
-            снимок.
+            <Info size={17} aria-hidden="true" /> Сохранённая версия фиксирует параметры и происхождение данных. После проверки её можно использовать в расчёте.
           </p>
           <label className="wb-field">
             <span>Имя новой версии</span>
@@ -57,7 +55,7 @@ export default function ScenarioSection() {
             </button>
             <button
               className="secondary-button"
-              onClick={() => setSpecJson(pretty(spec))}
+              onClick={() => setSpecJson(pretty(spec ?? { id: "", zones: [], sites: [], grid_nodes: [], options: [], travel_edges: [], scenarios: [], parameters: { years: [], annual_budgets_rub: [] } }))}
             >
               Вернуть выбранный вход
             </button>

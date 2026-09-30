@@ -30,7 +30,7 @@ export default function DatedSection() {
           <DatedFields
             value={datedJson}
             onChange={setDatedJson}
-            zones={spec.zones.map((item) => item.id)}
+            zones={(spec?.zones ?? []).map((item) => item.id)}
           />
           <details className="wb-advanced">
             <summary>Заявки и календарь · полный JSON</summary>

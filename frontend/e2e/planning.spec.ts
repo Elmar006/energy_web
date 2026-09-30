@@ -18,6 +18,7 @@ test("карта 2ГИС загружает сценарные маркеры и
         fitBounds() { window.__mapglTest.fitted = true; }
         getZoom() { return this.zoom; }
         setZoom(value) { this.zoom = value; window.__mapglTest.zooms.push(value); }
+        setCenter(value) { window.__mapglTest.center = value; }
         destroy() { this.container.replaceChildren(); }
       },
       HtmlMarker: class {
@@ -29,8 +30,14 @@ test("карта 2ГИС загружает сценарные маркеры и
     };`,
   }));
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_DEMO_PASSWORD ?? "demo-local-password");
+  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
   await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+
+  await expect(page.getByRole("heading", { name: "Данные не загружены" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Рассчитать план" })).toBeDisabled();
+  await page.getByText("Импорт готового сценария", { exact: true }).click();
+  await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/demo.json"));
+  await expect(page.locator("#workspace-scenario")).toHaveText("demo");
   await expect(page.getByText("2ГИС", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /зона спроса/ }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /кандидат/ }).first()).toBeVisible();
@@ -48,10 +55,16 @@ test("мобильный сценарий доступен от входа до 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
-  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_DEMO_PASSWORD ?? "demo-local-password");
+  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
   await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
   await expect(page.getByRole("heading", { name: "Развитие зарядной сети" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Выйти из рабочего пространства" })).toBeVisible();
+
+  await expect(page.getByRole("heading", { name: "Данные не загружены" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Рассчитать план" })).toBeDisabled();
+  await page.getByText("Импорт готового сценария", { exact: true }).click();
+  await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/demo.json"));
+  await expect(page.locator("#workspace-scenario")).toHaveText("demo");
   await expect(page.getByRole("group", { name: "Карта территории сценария" })).toBeVisible();
   const mapConfig = await page.request.get("/api/maps/config");
   if (!(await mapConfig.json()).configured) {
@@ -64,24 +77,44 @@ test("мобильный сценарий доступен от входа до 
   await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
 
-  await page.getByRole("radio", { name: /Для оператора/ }).check();
-  await expect(page.getByRole("radio", { name: /Для оператора/ })).toBeChecked();
-  await page.getByRole("radio", { name: /Для города/ }).check();
-  await page.getByRole("slider", { name: /Инвестиционный бюджет/ }).focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("slider", { name: /Инвестиционный бюджет/ })).toHaveValue("11");
-
   await page.getByRole("button", { name: "Рассчитать план" }).click();
   await expect(page.getByText("Расчёт завершён")).toBeVisible({ timeout: 150_000 });
+  await expect(page.getByRole("button", { name: "Развернуть", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Рассчитать план", exact: true })).toBeHidden();
+  await page.getByRole("button", { name: "Развернуть", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Рассчитать план", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Свернуть", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Этапы строительства" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Устойчивость к росту спроса" })).toBeVisible();
+  await page.getByRole("tab", { name: "Сравнение", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Основной план и альтернативы" })).toBeVisible();
+  await page.getByRole("tab", { name: "Данные и протокол", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Качество входа" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Энергетический аудит" })).toBeVisible();
+  await page.getByRole("tab", { name: "Энергетика", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Энергетический аудит", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Эксплуатация", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Работа сети по дням" })).toBeVisible();
+  await page.getByRole("tab", { name: "Данные и протокол", exact: true }).click();
   await expect(page.getByText("Спрос задан предположениями, а не измерен.")).toBeVisible();
+  await page.getByRole("tab", { name: "Сравнение", exact: true }).click();
   await expect(page.getByRole("region", { name: "Сравнение планов" }).getByRole("table")).toBeVisible();
+  await page.getByRole("tab", { name: "Энергетика", exact: true }).click();
   await expect(page.getByRole("region", { name: "Энергетический аудит по площадкам" }).getByRole("table")).toBeVisible();
+  for (const width of [1440, 1280, 1024, 968, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const tab of ["Сводка", "Территория", "Эксплуатация", "Энергетика", "Экономика", "Сравнение", "Данные и протокол"]) {
+      await page.getByRole("tab", { name: tab, exact: true }).click();
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), { message: `${tab}: overflow ${width}` }).toBe(true);
+    }
+  }
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Экспорт JSON" }).click();
+  const file = await download;
+  const exported = JSON.parse(readFileSync((await file.path())!, "utf8"));
+  expect(exported.schema_version).toBe("workspace-export-v1");
+  expect(exported.run.id).toBeTruthy();
+  expect(exported.result.optimization.selected.length).toBeGreaterThan(0);
+
   await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   await page.getByRole("button", { name: "Выйти из рабочего пространства" }).click();
@@ -90,10 +123,11 @@ test("мобильный сценарий доступен от входа до 
 
 test("пользовательский JSON загружается, проверяется и рассчитывается", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_DEMO_PASSWORD ?? "demo-local-password");
+  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
   await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await page.getByText("Импорт готового сценария", { exact: true }).click();
   await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/import_sample.json"));
-  await expect(page.locator(".intro-note strong")).toHaveText("import_sample");
+  await expect(page.locator("#workspace-scenario")).toHaveText("import_sample");
   await expect(page.locator(".source-quality")).toContainText("3 предположенных");
   await expect(page.getByText("1 кандидат")).toBeVisible();
   await page.getByRole("button", { name: "Рассчитать план" }).click();
@@ -105,21 +139,27 @@ test("пользовательский JSON загружается, провер
 
 test("закреплённый конкурсный кейс проходит от загрузки до проверяемого экрана", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_DEMO_PASSWORD ?? "demo-local-password");
+  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
   await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await page.getByText("Импорт готового сценария", { exact: true }).click();
   await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/commission_monaco.json"));
-  await expect(page.locator(".intro-note strong")).toHaveText("commission_monaco");
+  await expect(page.locator("#workspace-scenario")).toHaveText("commission_monaco");
   await page.getByRole("button", { name: "Рассчитать план" }).click();
   await expect(page.getByText("Расчёт завершён")).toBeVisible({ timeout: 150_000 });
+  await page.getByRole("tab", { name: "Сравнение", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Основной план и альтернативы" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Порог 50%/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Энергетический аудит" })).toBeVisible();
+  await page.getByRole("tab", { name: "Энергетика", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Энергетический аудит", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Эксплуатация", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Работа сети по дням" })).toBeVisible();
+  await page.getByRole("tab", { name: "Данные и протокол", exact: true }).click();
   await expect(page.getByText("Спрос задан предположениями, а не измерен.")).toBeVisible();
   await expect.poll(async () => page.locator("header img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
   await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   if (process.env.ENERGY_SCREENSHOT) {
     await page.screenshot({ path: process.env.ENERGY_SCREENSHOT, fullPage: true });
+    await page.getByRole("tab", { name: "Сравнение", exact: true }).click();
     await page.getByRole("heading", { name: "Основной план и альтернативы" }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: process.env.ENERGY_SCREENSHOT.replace(/\.png$/, "-detail.png") });
   }
@@ -127,7 +167,7 @@ test("закреплённый конкурсный кейс проходит о
 
 test("ограничение CVaR видно в результате, а несовместимые условия не выдаются за план", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_DEMO_PASSWORD ?? "demo-local-password");
+  await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
   await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
   const spec = JSON.parse(readFileSync(resolve(__dirname, "../../examples/import_sample.json"), "utf8"));
   spec.id = "e2e-city-cvar";
@@ -138,8 +178,9 @@ test("ограничение CVaR видно в результате, а нес�
   spec.parameters.risk = "expected_cvar";
   spec.parameters.cvar_alpha = 0.9;
   spec.parameters.max_cvar_unmet_kwh = 0;
+  await page.getByText("Импорт готового сценария", { exact: true }).click();
   await page.locator("#scenario-file").setInputFiles({ name: "cvar-test.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(spec)) });
-  await expect(page.locator(".intro-note strong")).toHaveText("cvar-test");
+  await expect(page.locator("#workspace-scenario")).toHaveText("cvar-test");
   await page.getByRole("button", { name: "Рассчитать план" }).click();
   await expect(page.getByText("Расчёт завершён")).toBeVisible({ timeout: 150_000 });
   await expect(page.getByText("CVaR · худшие 10% вероятности")).toBeVisible();
@@ -148,7 +189,7 @@ test("ограничение CVaR видно в результате, а нес�
   spec.id = "e2e-city-cvar-infeasible";
   spec.grid_nodes[0].headroom_kw = Array(24).fill(0);
   await page.locator("#scenario-file").setInputFiles({ name: "cvar-impossible.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(spec)) });
-  await expect(page.locator(".intro-note strong")).toHaveText("cvar-impossible");
+  await expect(page.locator("#workspace-scenario")).toHaveText("cvar-impossible");
   await page.getByRole("button", { name: "Рассчитать план" }).click();
   await expect(page.getByRole("heading", { name: "Ограничения несовместимы" })).toBeVisible({ timeout: 150_000 });
   await expect(page.getByText("Расчёт завершён")).toHaveCount(0);

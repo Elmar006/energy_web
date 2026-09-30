@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/Elmar006/energy_web/backend/internal/api"
@@ -21,7 +22,7 @@ func main() {
 		slog.Error("API_TOKEN configuration", "error", err)
 		os.Exit(1)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	db, err := store.New(ctx, os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -29,6 +30,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+	if err := config.ValidateRuntimeDatabase(ctx, db.DB, os.Getenv("APP_ENV")); err != nil {
+		slog.Error("runtime database configuration", "error", err)
+		os.Exit(1)
+	}
 	addr := os.Getenv("API_ADDR")
 	if addr == "" {
 		addr = ":8080"
@@ -42,7 +47,7 @@ func main() {
 	if root := os.Getenv("ARTIFACT_DIR"); root != "" {
 		artifacts = artifact.Local{Root: root}
 	}
-	server := &http.Server{Addr: addr, Handler: (api.Server{Store: db, Token: token, Cache: cache, EngineURL: os.Getenv("ENGINE_URL"), Artifacts: artifacts}).Handler(), ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Addr: addr, Handler: (api.Server{Store: db, Token: token, Cache: cache, EngineURL: os.Getenv("ENGINE_URL"), Artifacts: artifacts}).Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server", "error", err)

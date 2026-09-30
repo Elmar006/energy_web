@@ -1,0 +1,19 @@
+{
+  "version": "energy-backup-v1",
+  "created_at": "2026-09-30T16:56:25.850121+00:00",
+  "inventory": {
+    "migrations": 10,
+    "scenarios": 1,
+    "runs": 1
+  },
+  "files": {
+    "database.dump": {
+      "bytes": 44653,
+      "sha256": "612b1e02eb2c6f6770a3ac242ff8b2133cf3906c2b5f82394f91da5a91b9abd0"
+    },
+    "artifacts.tar.gz": {
+      "bytes": 572,
+      "sha256": "2e97e25b1fd8e21f104b32ca72f867dce2c1b32d14377246d16a7e6c83b6bf06"
+    }
+  }
+}

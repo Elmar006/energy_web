@@ -1,3 +1,4 @@
+import { BodyTooLarge, readLimitedJson } from "../../../../runtime/body.mjs";
 import { callBackend, isSignedIn } from "@/lib/server";
 
 export async function GET() {
@@ -13,14 +14,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   if (!(await isSignedIn())) return Response.json({ error: "Требуется вход" }, { status: 401 });
-  const length = Number(request.headers.get("content-length") || 0);
-  if (length > 2_000_000) return Response.json({ error: "Файл больше 2 МБ" }, { status: 413 });
-  const raw = await request.text();
-  if (raw.length > 2_000_000) return Response.json({ error: "Файл больше 2 МБ" }, { status: 413 });
   let input: { name?: unknown; spec?: unknown };
-  try { input = JSON.parse(raw); }
-  catch { return Response.json({ error: "Файл должен содержать корректный JSON" }, { status: 400 }); }
-  if (typeof input.name !== "string" || !input.name.trim() || input.name.length > 120 || !input.spec || typeof input.spec !== "object") {
+  try { input = await readLimitedJson(request, 2_000_000); }
+  catch (error) { return Response.json({ error: "Файл слишком велик или содержит некорректный JSON" }, { status: error instanceof BodyTooLarge ? 413 : 400 }); }
+  if (!input || typeof input !== "object" || Array.isArray(input) || typeof input.name !== "string" || !input.name.trim() || input.name.length > 120 || !input.spec || typeof input.spec !== "object" || Array.isArray(input.spec)) {
     return Response.json({ error: "Нужны название и объект расчётного сценария" }, { status: 422 });
   }
   try {

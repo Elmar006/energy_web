@@ -99,12 +99,15 @@ func HydrateDemand(ctx context.Context, spec json.RawMessage, reader Reader) (js
 		return nil, nil, ErrInvalid
 	}
 	raw, hasRef := fields["demand_dataset"]
-	if !hasRef {
-		return spec, nil, nil
-	}
 	decoder := json.NewDecoder(bytes.NewReader(spec))
 	if uniqueJSONValue(decoder) != nil || !errors.Is(decoder.Decode(new(any)), io.EOF) {
 		return nil, nil, ErrInvalid
+	}
+	// Python serializes an absent optional dataset as null when deriving a CSV
+	// scenario. Null is not an artifact reference; preserve the exact snapshot
+	// and its inline/legacy demand. Malformed non-null references still fail.
+	if !hasRef || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return spec, nil, nil
 	}
 	if _, exists := fields["service_calendar"]; exists {
 		return nil, nil, ErrInvalid

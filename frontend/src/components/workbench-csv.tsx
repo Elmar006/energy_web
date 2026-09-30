@@ -38,6 +38,7 @@ export default function CsvSection() {
     <>
       {section === "csv" && (
         <div className="wb-body">
+          {!scenario && <div className="prerequisite" role="note"><strong>Сначала выберите сохранённый сценарий</strong><p>Импорт обновит его спрос или резерв сети и создаст новую версию. Выберите источник вверху страницы или сохраните сценарий в редакторе.</p><Link className="secondary-button" href="/data/scenario">Создать сценарий</Link></div>}
           <p className="wb-note">
             <Info size={17} /> CSV применяется к выбранному сохранённому
             сценарию и создаёт новый. Метка «наблюдалось» задаётся поставщиком.
@@ -61,10 +62,10 @@ export default function CsvSection() {
             <strong>{scenario?.name || "сначала сохраните сценарий"}</strong>.{" "}
             {csvType === "sessions"
               ? "Зоны: " +
-                spec.zones.map((item) => item.id).join(", ") +
+                (spec?.zones ?? []).map((item) => item.id).join(", ") +
                 ". CSV: session_id,zone_id,started_at,ended_at,energy_kwh. История не раскрывает скрытый спрос."
               : "Узлы: " +
-                spec.grid_nodes.map((item) => item.id).join(", ") +
+                (spec?.grid_nodes ?? []).map((item) => item.id).join(", ") +
                 ". CSV: grid_node_id,hour,headroom_kw; все часы 0–23."}
           </p>
           {metadata}

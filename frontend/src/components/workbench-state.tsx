@@ -26,7 +26,7 @@ export function useWorkbenchController({
   const [datasetName, setDatasetName] = useState("");
   const [kind, setKind] = useState("assumed");
   const [license, setLicense] = useState("");
-  const [timeZone, setTimeZone] = useState("Europe/Moscow");
+  const [timeZone, setTimeZone] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [coverage, setCoverage] = useState(false);
@@ -34,16 +34,16 @@ export function useWorkbenchController({
   const [geoFile, setGeoFile] = useState<File | null>(null);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [versions, setVersions] = useState<Record<string, string>>({});
-  const [specJson, setSpecJson] = useState(pretty(spec));
+  const [specJson, setSpecJson] = useState(pretty(spec ?? { id: "", zones: [], sites: [], grid_nodes: [], options: [], travel_edges: [], scenarios: [], parameters: { years: [], annual_budgets_rub: [] } }));
   const [optionsJson, setOptionsJson] = useState(
-    pretty((spec as unknown as Obj).options || []),
+    pretty((spec as unknown as Obj | null)?.options || []),
   );
-  const [parametersJson, setParametersJson] = useState(pretty(spec.parameters));
-  const [scenariosJson, setScenariosJson] = useState(pretty(spec.scenarios));
+  const [parametersJson, setParametersJson] = useState(pretty(spec?.parameters ?? {}));
+  const [scenariosJson, setScenariosJson] = useState(pretty(spec?.scenarios ?? []));
   const [mobilityJson, setMobilityJson] = useState(
     pretty({
       schema_version: "mobility-v1",
-      time_zone: "Europe/Moscow",
+      time_zone: "",
       covered_dates: [],
       replace_zone_ids: [],
       source: "",
@@ -58,7 +58,9 @@ export function useWorkbenchController({
       charging_requests: [],
     }),
   );
-  const [modelJson, setModelJson] = useState("{}");
+  const [modelJson, setModelJson] = useState(() => pretty(model === "fleets/schedule"
+    ? { slot_minutes: 15, efficiency: 0.95, solver_seconds: 30, buses: [], sites: [], trips: [], windows: [] }
+    : { consumption_multiplier: 1, stations: [] }));
   const [preview, setPreview] = useState<Obj | null>(null);
   const [previewPayload, setPreviewPayload] = useState<Obj | null>(null);
   const [modelResult, setModelResult] = useState<unknown>(null);

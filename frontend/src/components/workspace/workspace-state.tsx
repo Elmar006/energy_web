@@ -5,12 +5,10 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
+  useRef,
   useState,
 } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import type { Mode } from "@/lib/demo";
-import { makeDemo } from "@/lib/demo";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   isPlanningSpec,
   provenanceSummary,
@@ -31,12 +29,11 @@ function returnPath() {
 function useWorkspaceController() {
   const router = useRouter();
   const pathname = usePathname();
+  const scenarioQuery = useSearchParams().get("scenario");
+  const requestEpoch = useRef(0);
   const routeRunId = /^\/runs\/([0-9a-f-]{36})$/.exec(pathname)?.[1] ?? null;
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<Mode>("city");
-  const [budget, setBudget] = useState(10);
-  const [demand, setDemand] = useState(100);
   const [savedScenarios, setSavedScenarios] = useState<ScenarioSummary[]>([]);
   const [loadedScenario, setLoadedScenario] = useState<SavedScenario | null>(
     null,
@@ -81,22 +78,22 @@ function useWorkspaceController() {
   useEffect(() => {
     if (!signedIn) return;
     fetch("/api/scenarios", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : []))
+      .then((response) => { if (!response.ok) throw new Error("Список сценариев недоступен"); return response.json(); })
       .then(setSavedScenarios)
-      .catch(() => setSavedScenarios([]));
+      .catch(() => setError("Не удалось загрузить список сценариев"));
   }, [signedIn]);
 
   useEffect(() => {
     if (!signedIn || routeRunId) return;
-    const scenarioId = new URLSearchParams(window.location.search).get(
-      "scenario",
-    );
+    const scenarioId = scenarioQuery;
     if (!scenarioId || !/^[0-9a-f-]{36}$/.test(scenarioId)) return;
-    if (loadedScenario?.id === scenarioId) return;
+    let cancelled = false;
+    const epoch = requestEpoch.current;
     fetch(`/api/scenarios/${scenarioId}`, { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
+      .then((response) => { if (!response.ok) throw new Error("Сценарий недоступен"); return response.json(); })
       .then((scenario) => {
-        if (scenario && isPlanningSpec(scenario.spec)) {
+        if (!isPlanningSpec(scenario?.spec)) throw new Error("Сценарий содержит некорректный вход");
+        if (!cancelled && epoch === requestEpoch.current && scenario && isPlanningSpec(scenario.spec)) {
           setLoadedScenario({
             id: scenario.id,
             name: scenario.name,
@@ -104,30 +101,32 @@ function useWorkspaceController() {
           });
         }
       })
-      .catch(() => setError("Сценарий не удалось открыть"));
-  }, [signedIn, routeRunId, pathname, loadedScenario?.id]);
+      .catch(() => { if (!cancelled && epoch === requestEpoch.current) setError("Сценарий не удалось открыть"); });
+    return () => { cancelled = true; };
+  }, [signedIn, routeRunId, scenarioQuery]);
 
   useEffect(() => {
-    if (!routeRunId || routeRunId === runId) return;
     const timer = window.setTimeout(() => {
       setRunId(routeRunId);
       setRun(null);
       setResult(null);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [routeRunId, runId]);
+  }, [routeRunId]);
 
-  const demoSpec = useMemo(
-    () => makeDemo(mode, budget * 1_000_000, demand),
-    [mode, budget, demand],
-  );
-  const activeSpec: PlanningSpec = loadedScenario?.spec ?? demoSpec;
-  const provenance = provenanceSummary(activeSpec);
+  const inputMatchesRoute = routeRunId
+    ? run?.id === routeRunId && run.scenario_id === loadedScenario?.id
+    : scenarioQuery !== null && scenarioQuery === loadedScenario?.id;
+  const activeSpec: PlanningSpec | null = inputMatchesRoute ? loadedScenario?.spec ?? null : null;
+  const provenance = activeSpec ? provenanceSummary(activeSpec) : { observed: 0, derived: 0, assumed: 0 };
 
   const refresh = useCallback(async () => {
     if (!runId || !signedIn) return;
+    const epoch = requestEpoch.current;
+    const path = window.location.pathname;
     const response = await fetch(`/api/runs/${runId}`, { cache: "no-store" });
     const payload = await response.json();
+    if (epoch !== requestEpoch.current || path !== window.location.pathname) return;
     if (!response.ok) {
       setError(payload.error || "Не удалось получить результат");
       return;
@@ -181,8 +180,9 @@ function useWorkspaceController() {
       return;
     let cancelled = false;
     fetch(`/api/scenarios/${run.scenario_id}`, { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
+      .then((response) => { if (!response.ok) throw new Error("Сценарий недоступен"); return response.json(); })
       .then((scenario) => {
+        if (!isPlanningSpec(scenario?.spec)) throw new Error("Сценарий содержит некорректный вход");
         if (!cancelled && scenario && isPlanningSpec(scenario.spec)) {
           setLoadedScenario({
             id: scenario.id,
@@ -191,7 +191,7 @@ function useWorkspaceController() {
           });
         }
       })
-      .catch(() => undefined);
+      .catch(() => { if (!cancelled) setError("Вход сохранённого расчёта недоступен"); });
     return () => {
       cancelled = true;
     };
@@ -206,7 +206,8 @@ function useWorkspaceController() {
       body: JSON.stringify({ password }),
     });
     if (!response.ok) {
-      setError("Неверный пароль доступа");
+      const body = await response.json().catch(() => null);
+      setError(body?.error || "Не удалось войти");
       return;
     }
     setSignedIn(true);
@@ -215,6 +216,7 @@ function useWorkspaceController() {
   }
 
   async function logout() {
+    requestEpoch.current++;
     await fetch("/api/session", { method: "DELETE" });
     setSignedIn(false);
     setResult(null);
@@ -225,6 +227,8 @@ function useWorkspaceController() {
   }
 
   async function start() {
+    if (!loadedScenario || !activeSpec) { setError("Выберите или загрузите сценарий перед запуском"); return; }
+    const epoch = ++requestEpoch.current;
     setSubmitting(true);
     setError("");
     setResult(null);
@@ -280,21 +284,20 @@ function useWorkspaceController() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...(loadedScenario
-            ? { scenario_id: loadedScenario.id }
-            : { mode, budget: budget * 1_000_000, demand }),
+          scenario_id: loadedScenario.id,
           ...(runSpec ? { run_spec: runSpec } : {}),
         }),
       });
       const payload = await response.json();
       if (!response.ok)
         throw new Error(payload.error || "Не удалось запустить расчёт");
+      if (epoch !== requestEpoch.current) return;
       setRunId(payload.run_id);
       router.push(`/runs/${payload.run_id}`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Ошибка запуска");
+      if (epoch === requestEpoch.current) setError(caught instanceof Error ? caught.message : "Ошибка запуска");
     } finally {
-      setSubmitting(false);
+      if (epoch === requestEpoch.current) setSubmitting(false);
     }
   }
 
@@ -318,6 +321,7 @@ function useWorkspaceController() {
   function acceptScenario(scenario: SavedScenario) {
     if (!scenario?.id || !isPlanningSpec(scenario.spec))
       throw new Error("Сервис вернул неполный сценарий");
+    requestEpoch.current++;
     setLoadedScenario(scenario);
     setSavedScenarios((items) => [
       {
@@ -336,13 +340,15 @@ function useWorkspaceController() {
   }
 
   async function chooseScenario(id: string) {
+    const epoch = ++requestEpoch.current;
     setError("");
+    const target = pathname.startsWith("/runs/") ? "/plan" : pathname;
     if (!id) {
       setLoadedScenario(null);
       setRunId(null);
       setRun(null);
       setResult(null);
-      router.push("/plan");
+      router.push(target);
       return;
     }
     try {
@@ -350,6 +356,7 @@ function useWorkspaceController() {
         cache: "no-store",
       });
       const scenario = await response.json();
+      if (epoch !== requestEpoch.current) return;
       if (!response.ok || !isPlanningSpec(scenario.spec))
         throw new Error("Сохранённый сценарий повреждён или недоступен");
       setLoadedScenario({
@@ -360,7 +367,7 @@ function useWorkspaceController() {
       setRunId(null);
       setRun(null);
       setResult(null);
-      router.push(`/plan?scenario=${id}`);
+      router.push(`${target}?scenario=${id}`);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -371,6 +378,7 @@ function useWorkspaceController() {
   }
 
   async function uploadScenario(file: File) {
+    const epoch = ++requestEpoch.current;
     setError("");
     setUploading(true);
     try {
@@ -387,6 +395,7 @@ function useWorkspaceController() {
         body: JSON.stringify({ name, spec }),
       });
       const scenario = await response.json();
+      if (epoch !== requestEpoch.current) return;
       if (!response.ok)
         throw new Error(scenario.error || "Сценарий не прошёл проверку");
       if (!isPlanningSpec(scenario.spec))
@@ -426,12 +435,6 @@ function useWorkspaceController() {
     signedIn,
     password,
     setPassword,
-    mode,
-    setMode,
-    budget,
-    setBudget,
-    demand,
-    setDemand,
     savedScenarios,
     loadedScenario,
     uploading,

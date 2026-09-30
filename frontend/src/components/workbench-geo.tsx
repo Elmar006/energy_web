@@ -143,7 +143,7 @@ export default function GeoSection() {
                     }))
                   }
                   options={[
-                    { value: "", label: "Выберите UUID версии" },
+                    { value: "", label: "Выберите версию набора" },
                     ...datasets
                       .filter((item) => item.format === "geojson")
                       .map((item) => ({

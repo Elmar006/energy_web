@@ -1,0 +1,132 @@
+# Standalone configuration. Do not merge with compose.yaml (development ports).
+name: energy-production
+x-runtime: &runtime
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 256
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+x-backend-env: &backend-env
+  APP_ENV: production
+  DATABASE_URL: postgres://energy_runtime:${RUNTIME_DB_PASSWORD:?Set RUNTIME_DB_PASSWORD}@db:5432/energy?sslmode=disable
+  ENGINE_URL: http://engine:8090
+  ARTIFACT_DIR: /data/artifacts
+services:
+  db:
+    <<: *runtime
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    image: postgis/postgis:18-3.6-alpine
+    environment:
+      POSTGRES_DB: energy
+      POSTGRES_USER: energy_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes: [postgres_data:/var/lib/postgresql]
+    networks: [private]
+    mem_limit: 2g
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U energy_owner -d energy"]
+      interval: 5s
+      retries: 20
+  redis:
+    <<: *runtime
+    image: redis:8.10.0-alpine
+    command: [redis-server, --maxmemory, 128mb, --maxmemory-policy, allkeys-lru]
+    networks: [private]
+    mem_limit: 192m
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      retries: 10
+  engine:
+    <<: *runtime
+    build: ./engine
+    networks: [private]
+    read_only: true
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    mem_limit: 4g
+    cpus: 2
+    environment: {PYTHONDONTWRITEBYTECODE: "1", OMP_NUM_THREADS: "2"}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8090/healthz')"]
+      interval: 10s
+      retries: 10
+  migrate:
+    build: ./backend
+    entrypoint: [/migrate]
+    environment:
+      DATABASE_URL: postgres://energy_owner:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/energy?sslmode=disable
+    networks: [private]
+    depends_on: {db: {condition: service_healthy}}
+    restart: "no"
+  runtime-role:
+    build: ./backend
+    entrypoint: [/runtime-role]
+    environment:
+      DATABASE_URL: postgres://energy_owner:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/energy?sslmode=disable
+      RUNTIME_DB_PASSWORD: ${RUNTIME_DB_PASSWORD:?Set RUNTIME_DB_PASSWORD}
+    networks: [private]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+    restart: "no"
+  artifact-init:
+    image: alpine:3.22
+    command: [sh, -c, "chown 65532:65532 /data/artifacts && chmod 700 /data/artifacts"]
+    volumes: [artifact_data:/data/artifacts]
+    networks: [private]
+    restart: "no"
+  api:
+    <<: *runtime
+    build: ./backend
+    environment:
+      <<: *backend-env
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN}
+      API_ADDR: :8080
+      REDIS_ADDR: redis:6379
+    volumes: [artifact_data:/data/artifacts]
+    networks: [private]
+    read_only: true
+    mem_limit: 512m
+    depends_on:
+      artifact-init: {condition: service_completed_successfully}
+      runtime-role: {condition: service_completed_successfully}
+      engine: {condition: service_healthy}
+      redis: {condition: service_healthy}
+  worker:
+    <<: *runtime
+    build: ./backend
+    entrypoint: [/worker]
+    environment: *backend-env
+    volumes: [artifact_data:/data/artifacts]
+    networks: [private]
+    read_only: true
+    mem_limit: 512m
+    stop_grace_period: 30s
+    depends_on:
+      artifact-init: {condition: service_completed_successfully}
+      runtime-role: {condition: service_completed_successfully}
+      engine: {condition: service_healthy}
+  frontend:
+    <<: *runtime
+    build: ./frontend
+    environment:
+      APP_ENV: production
+      APP_AUTH_MODE: private-single-tenant
+      APP_COOKIE_SECURE: "true"
+      APP_PUBLIC_ORIGIN: ${APP_PUBLIC_ORIGIN:?Set canonical HTTPS origin}
+      APP_ACCESS_PASSWORD: ${APP_ACCESS_PASSWORD:?Set APP_ACCESS_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET}
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN}
+      ENERGY_API_URL: http://api:8080
+      DGIS_MAPGL_API_KEY: ${DGIS_MAPGL_API_KEY:-}
+      DGIS_MAP_STYLE_ID: ${DGIS_MAP_STYLE_ID:-}
+    ports: ["127.0.0.1:${FRONTEND_PORT:-53002}:3000"]
+    networks: [private, edge]
+    mem_limit: 768m
+    depends_on: [api]
+networks:
+  private: {internal: true}
+  edge: {}
+volumes:
+  postgres_data:
+  artifact_data:

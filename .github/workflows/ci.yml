@@ -7,6 +7,13 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      POSTGRES_PASSWORD: energy_dev
+      API_TOKEN: ci-only-not-a-secret-energy-test-token-2026
+      APP_ACCESS_PASSWORD: ci-only-energy-access-password-2026
+      SESSION_SECRET: ci-only-independent-energy-session-secret-2026
+      APP_ENV: development
+      ALLOW_INSECURE_DEMO_TOKEN: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -48,10 +55,19 @@ jobs:
           TEST_DATABASE_URL: postgres://energy:energy_dev@localhost:55432/energy?sslmode=disable
         run: go test -race -tags=integration ./internal/...
       - name: Python dependencies
-        run: python -m pip install -r engine/requirements.txt
+        run: python -m pip install -r engine/requirements-dev.txt
+      - name: Go dependency vulnerabilities
+        working-directory: backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - name: Python dependency vulnerabilities
+        run: |
+          python -m pip install pip-audit==2.10.1
+          python -m pip_audit -r engine/requirements-dev.txt
       - name: Engine tests
         working-directory: engine
         run: python -m pytest -q
+      - name: Deployment configuration tests
+        run: python -m unittest discover -s scripts -p "test_production_*.py"
       - name: OpenAPI generation is reproducible
         run: |
           python scripts/generate_openapi.py
@@ -59,9 +75,13 @@ jobs:
       - name: Frontend dependencies
         working-directory: frontend
         run: npm ci
+      - name: Frontend dependency vulnerabilities
+        working-directory: frontend
+        run: npm audit --omit=dev
       - name: Frontend lint, types and build
         working-directory: frontend
         run: |
+          npm test
           npm run lint
           npm run typecheck
           npm run build
@@ -77,6 +97,24 @@ jobs:
       - name: Browser end-to-end test
         working-directory: frontend
         run: npm run test:e2e
+      - name: Private deployment and recovery smoke
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import secrets
+          keys = ('POSTGRES_PASSWORD', 'RUNTIME_DB_PASSWORD', 'API_TOKEN', 'SESSION_SECRET', 'APP_ACCESS_PASSWORD')
+          values = {key: secrets.token_hex(32) for key in keys}
+          values.update(APP_PUBLIC_ORIGIN='https://planner.test', FRONTEND_PORT='53002')
+          Path('data').mkdir(exist_ok=True)
+          Path('data/ci-production.env').write_text(''.join(f'{key}={value}\n' for key, value in values.items()), encoding='utf-8')
+          PY
+          unset POSTGRES_PASSWORD RUNTIME_DB_PASSWORD API_TOKEN SESSION_SECRET APP_ACCESS_PASSWORD APP_PUBLIC_ORIGIN FRONTEND_PORT
+          python scripts/production_preflight.py --env-file data/ci-production.env
+          docker compose --env-file data/ci-production.env -f compose.production.yaml -p energy-ci-production up -d --build
+          python scripts/smoke_production.py --env-file data/ci-production.env --project energy-ci-production
+          docker compose --env-file data/ci-production.env -f compose.production.yaml -p energy-ci-production stop frontend api worker
+          python scripts/production_backup.py --env-file data/ci-production.env --project energy-ci-production backup --directory data/ci-production-backup
+          python scripts/production_backup.py --env-file data/ci-production.env --project energy-ci-production recover-check --directory data/ci-production-backup --database energy_restore_ci --artifact-output data/ci-production-restored
       - name: Compose logs on failure
         if: failure()
         run: docker compose logs --tail=150

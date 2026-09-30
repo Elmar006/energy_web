@@ -373,6 +373,44 @@
         "title": "GridNode",
         "type": "object"
       },
+      "OperationalOutage": {
+        "additionalProperties": false,
+        "description": "Deterministic station outage followed by repair in elapsed UTC minutes.",
+        "properties": {
+          "schema_version": {
+            "const": "operational-outage-v1",
+            "default": "operational-outage-v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "site_id": {
+            "minLength": 1,
+            "title": "Site Id",
+            "type": "string"
+          },
+          "start_minute": {
+            "minimum": 0,
+            "title": "Start Minute",
+            "type": "integer"
+          },
+          "repair_minute": {
+            "exclusiveMinimum": 0,
+            "title": "Repair Minute",
+            "type": "integer"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          }
+        },
+        "required": [
+          "site_id",
+          "start_minute",
+          "repair_minute",
+          "provenance"
+        ],
+        "title": "OperationalOutage",
+        "type": "object"
+      },
       "Parameters": {
         "additionalProperties": false,
         "properties": {
@@ -1555,6 +1593,13 @@
               "$ref": "#/components/schemas/SiteTravelEdge"
             },
             "title": "Site Travel Edges",
+            "type": "array"
+          },
+          "operational_outages": {
+            "items": {
+              "$ref": "#/components/schemas/OperationalOutage"
+            },
+            "title": "Operational Outages",
             "type": "array"
           },
           "parameters": {

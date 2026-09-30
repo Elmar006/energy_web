@@ -159,7 +159,7 @@ def main() -> None:
     def frontend_call(method: str, path: str, body: dict | None = None) -> dict:
         payload = json.dumps(body).encode() if body is not None else None
         request = Request(FRONTEND + path, data=payload, method=method,
-                          headers={"Content-Type": "application/json"})
+                          headers={"Content-Type": "application/json", "Origin": FRONTEND})
         with browser.open(request, timeout=30) as response:
             return json.load(response)
 
@@ -173,7 +173,7 @@ def main() -> None:
         raise AssertionError("unauthenticated map configuration was exposed")
     except HTTPError as error:
         assert error.code == 401, error
-    login = frontend_call("POST", "/api/session", {"password": os.environ.get("APP_DEMO_PASSWORD", "demo-local-password")})
+    login = frontend_call("POST", "/api/session", {"password": os.environ.get("APP_ACCESS_PASSWORD", os.environ.get("APP_DEMO_PASSWORD", ""))})
     assert login["signed_in"]
     assert frontend_call("GET", "/api/session")["signed_in"]
     map_config = frontend_call("GET", "/api/maps/config")
@@ -245,7 +245,12 @@ def main() -> None:
         assert extra_state["state"] == "succeeded", extra_state
         extra_result = call("GET", f"/api/v1/runs/{extra_run['id']}/results")
         assert extra_result["optimization"]["selected"], extra_result
-    frontend_run = frontend_call("POST", "/api/runs", {"mode": "city", "budget": 10_000_000, "demand": 100})
+    try:
+        frontend_call("POST", "/api/runs", {"mode": "city", "budget": 10_000_000, "demand": 100})
+        raise AssertionError("implicit demo run was accepted")
+    except HTTPError as error:
+        assert error.code == 422, error
+    frontend_run = frontend_call("POST", "/api/runs", {"scenario_id": scenario["id"]})
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
         frontend_state = frontend_call("GET", f"/api/runs/{frontend_run['run_id']}")

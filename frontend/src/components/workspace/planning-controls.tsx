@@ -3,14 +3,12 @@
 import {
   Activity,
   ArrowRight,
-  Check,
   Clock3,
   Info,
   MapPinned,
   Zap,
 } from "lucide-react";
-import type { Dispatch, SetStateAction } from "react";
-import type { Mode } from "@/lib/demo";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import type { PlanningSpec } from "@/lib/planning";
 import Select from "@/components/ui/select";
 import {
@@ -25,16 +23,10 @@ type RunMode = "default" | "validation" | "improvement";
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
 type Props = {
-  activeSpec: PlanningSpec;
+  activeSpec: PlanningSpec | null;
   loadedScenario: SavedScenario | null;
   savedScenarios: ScenarioSummary[];
   provenance: { observed: number; derived: number; assumed: number };
-  mode: Mode;
-  setMode: Setter<Mode>;
-  budget: number;
-  setBudget: Setter<number>;
-  demand: number;
-  setDemand: Setter<number>;
   yearsLabel: string;
   runMode: RunMode;
   setRunMode: Setter<RunMode>;
@@ -59,14 +51,7 @@ type Props = {
 export default function PlanningControls({
   activeSpec,
   loadedScenario,
-  savedScenarios,
   provenance,
-  mode,
-  setMode,
-  budget,
-  setBudget,
-  demand,
-  setDemand,
   yearsLabel,
   runMode,
   setRunMode,
@@ -83,10 +68,11 @@ export default function PlanningControls({
   run,
   result,
   uploading,
-  chooseScenario,
   uploadScenario,
   start,
 }: Props) {
+  const [expandedResult, setExpandedResult] = useState<Result | null>(null);
+  const collapsed = Boolean(result) && expandedResult !== result;
   return (
     <aside className="control-panel" aria-labelledby="scenario-title">
       <div className="panel-heading">
@@ -95,25 +81,15 @@ export default function PlanningControls({
         </span>
         <div>
           <p className="eyebrow">ПАРАМЕТРЫ РАСЧЁТА</p>
-          <h2 id="scenario-title">Новый сценарий</h2>
+          <h2 id="scenario-title">{loadedScenario ? "Условия запуска" : "Настроить сценарий"}</h2>
         </div>
+        {result && <button type="button" className="parameters-toggle secondary-button compact-button" aria-controls="planning-parameters-body" aria-expanded={!collapsed} onClick={() => setExpandedResult(collapsed ? result : null)}>{collapsed ? "Развернуть" : "Свернуть"}</button>}
       </div>
-      <div className="scenario-source">
-        <label htmlFor="saved-scenario">Источник расчёта</label>
-        <Select
-          id="saved-scenario"
-          label="Источник расчёта"
-          value={loadedScenario?.id ?? ""}
-          onValueChange={(value) => void chooseScenario(value)}
-          options={[
-            { value: "", label: "Демо · синтетические данные" },
-            ...savedScenarios
-              .filter((item) => !item.name.startsWith("Демо ·"))
-              .map((item) => ({ value: item.id, label: item.name })),
-          ]}
-        />
+      <div id="planning-parameters-body" className={collapsed ? "parameters-body controls-closed" : "parameters-body"}>
+      <details className="scenario-source source-import">
+        <summary>Импорт готового сценария</summary>
         <label className="file-label" htmlFor="scenario-file">
-          Загрузить PlanningInput JSON
+          Файл сценария · JSON
         </label>
         <input
           id="scenario-file"
@@ -132,7 +108,7 @@ export default function PlanningControls({
             ? "Проверяем и сохраняем…"
             : "Площадки, спрос, сеть, тарифы и происхождение данных проверяются перед сохранением."}
         </small>
-      </div>
+      </details>
       {loadedScenario && (
         <div className="source-quality">
           <strong>Качество входа</strong>
@@ -141,9 +117,9 @@ export default function PlanningControls({
             {provenance.derived} вычисленных · {provenance.assumed}{" "}
             предположенных.
           </span>
-          {activeSpec.datasets?.length ? (
+          {activeSpec?.datasets?.length ? (
             <ul>
-              {activeSpec.datasets.map((dataset) => (
+              {activeSpec?.datasets.map((dataset) => (
                 <li key={dataset.sha256}>
                   <strong>
                     {dataset.name} · {dataset.kind}
@@ -161,82 +137,7 @@ export default function PlanningControls({
           )}
         </div>
       )}
-      {!loadedScenario && (
-        <>
-          <fieldset className="mode-options">
-            <legend>Цель планирования</legend>
-            <label className={`mode-card ${mode === "city" ? "active" : ""}`}>
-              <input
-                type="radio"
-                name="mode"
-                checked={mode === "city"}
-                onChange={() => setMode("city")}
-              />
-              <span className="mode-text">
-                <strong>Для города</strong>
-                <small>Максимальная доступность зарядки</small>
-              </span>
-              <span className="mode-check">
-                {mode === "city" && <Check size={15} />}
-              </span>
-            </label>
-            <label
-              className={`mode-card ${mode === "operator" ? "active" : ""}`}
-            >
-              <input
-                type="radio"
-                name="mode"
-                checked={mode === "operator"}
-                onChange={() => setMode("operator")}
-              />
-              <span className="mode-text">
-                <strong>Для оператора</strong>
-                <small>Экономика развития сети</small>
-              </span>
-              <span className="mode-check">
-                {mode === "operator" && <Check size={15} />}
-              </span>
-            </label>
-          </fieldset>
-          <div className="field-block">
-            <label htmlFor="budget">
-              Инвестиционный бюджет <strong>{budget} млн ₽</strong>
-            </label>
-            <input
-              id="budget"
-              type="range"
-              min="1"
-              max="50"
-              step="1"
-              value={budget}
-              onChange={(e) => setBudget(Number(e.target.value))}
-            />
-            <div className="range-ends">
-              <span>1 млн ₽</span>
-              <span>50 млн ₽</span>
-            </div>
-          </div>
-          <div className="field-block">
-            <label htmlFor="demand">
-              Уровень спроса <strong>{demand}%</strong>
-            </label>
-            <input
-              id="demand"
-              type="range"
-              min="50"
-              max="200"
-              step="10"
-              value={demand}
-              onChange={(e) => setDemand(Number(e.target.value))}
-            />
-            <div className="range-ends">
-              <span>50%</span>
-              <span>200%</span>
-            </div>
-          </div>
-        </>
-      )}
-      <div className="parameters-summary">
+      {activeSpec && <div className="parameters-summary">
         <div>
           <Clock3 size={17} />
           <span>Горизонт</span>
@@ -246,23 +147,23 @@ export default function PlanningControls({
           <Zap size={17} />
           <span>Энергосеть</span>
           <strong>
-            {plural(activeSpec.grid_nodes.length, "узел", "узла", "узлов")}
+            {activeSpec ? plural(activeSpec.grid_nodes.length, "узел", "узла", "узлов") : "—"}
           </strong>
         </div>
         <div>
           <MapPinned size={17} />
           <span>Площадки</span>
           <strong>
-            {plural(
+            {activeSpec ? plural(
               activeSpec.sites.length,
               "кандидат",
               "кандидата",
               "кандидатов",
-            )}
+            ) : "—"}
           </strong>
         </div>
-      </div>
-      <details className="run-settings">
+      </div>}
+      {activeSpec && <details className="run-settings">
         <summary>Настройки проверки расчёта</summary>
         <div className="run-setting-field">
           Режим
@@ -330,12 +231,12 @@ export default function PlanningControls({
             </small>
           </>
         )}
-      </details>
+      </details>}
       <button
         className="primary-button run-button"
         onClick={start}
         disabled={
-          submitting ||
+          !activeSpec || !loadedScenario || submitting ||
           (runId !== null &&
             run?.state !== "succeeded" &&
             run?.state !== "failed" &&
@@ -353,9 +254,10 @@ export default function PlanningControls({
         <Info size={15} />{" "}
         {loadedScenario
           ? "Происхождение записей задаётся автором файла; техническая проверка формата не подтверждает достоверность исходных данных."
-          : "Все мощности, цены и спрос в пилоте — сценарные предположения."}{" "}
+          : "Данные не загружены. Расчёт требует явно сохранённого входа."}{" "}
         Результат не является согласованием подключения.
       </p>
+      </div>
     </aside>
   );
 }

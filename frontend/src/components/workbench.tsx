@@ -21,13 +21,13 @@ export default function Workbench(props: Props) {
             <p className="eyebrow">РАБОЧИЕ ИНСТРУМЕНТЫ</p>
             <h2>
               {view === "data"
-                ? "Источники и сценарии"
+                ? section === "editor" ? "Редактор сценария" : section === "csv" ? "Табличные источники" : section === "geo" ? "Территория и геоданные" : "Заявки и календарь"
                 : view === "mobility"
                   ? "Потенциальный спрос из маршрутов"
                   : "Отдельные модели"}
             </h2>
           </div>
-          <span>Версионированные входы · проверяемые результаты</span>
+          <span className="wb-context-label">{scenario ? "Выбранная версия" : "Новый вход"}</span>
         </div>
         {view === "data" && (
           <>

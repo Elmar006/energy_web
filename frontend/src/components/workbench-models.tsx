@@ -3,6 +3,7 @@
 import { useWorkbench } from "./workbench-state";
 import { ArrowRight, Info } from "lucide-react";
 import ModelFields from "@/components/model-fields";
+import ModelResultView from "@/components/model-result";
 import Link from "next/link";
 import { api, pretty, JsonEditor } from "./workbench-shared";
 
@@ -49,13 +50,15 @@ export default function ModelsSection() {
           </div>
           <p className="wb-help">
             {model === "corridors/check"
-              ? "Передайте CorridorSpec с маршрутом, энергетикой машины и станциями."
-              : "Передайте FleetSpec с назначенными рейсами, окнами зарядки, батареями и лимитами депо."}
+              ? "Задайте длину маршрута, характеристики автомобиля и станции по пути."
+              : "Добавьте машины, назначенные рейсы и доступные окна зарядки. Время задаётся номерами интервалов от начала горизонта."}
           </p>
+          <fieldset className="model-inputs" disabled={busy}>
+          <legend className="sr-only">Параметры отдельной модели</legend>
           <ModelFields
             model={model}
             value={modelJson}
-            onChange={setModelJson}
+            onChange={value => { setModelJson(value); setModelResult(null); }}
           />
           <details className="wb-advanced">
             <summary>Полный контракт модели · JSON</summary>
@@ -66,33 +69,30 @@ export default function ModelsSection() {
                   : "FleetSpec JSON"
               }
               value={modelJson}
-              setValue={setModelJson}
+              setValue={value => { setModelJson(value); setModelResult(null); }}
               rows={22}
             />
           </details>
+          </fieldset>
           <button
             className="primary-button"
             disabled={busy}
             onClick={() =>
-              void perform(async () =>
+              void perform(async () => {
+                setModelResult(null);
                 setModelResult(
                   await api(model, {
                     method: "POST",
                     headers: jsonHeaders,
                     body: pretty(JSON.parse(modelJson)),
                   }),
-                ),
+                ); },
               )
             }
           >
             Выполнить расчёт <ArrowRight size={17} />
           </button>
-          {modelResult !== null && (
-            <div className="wb-preview">
-              <strong>Результат модели</strong>
-              <pre>{pretty(modelResult)}</pre>
-            </div>
-          )}
+          {modelResult !== null && <ModelResultView value={modelResult} />}
         </div>
       )}
     </>

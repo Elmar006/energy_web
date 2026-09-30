@@ -1,12 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
+import SectionTabs from "@/components/ui/section-tabs";
+import Territory from "./territory";
 import {
   ArrowRight,
   BatteryCharging,
   Check,
   ChevronRight,
   Info,
+  Download,
   Zap,
 } from "lucide-react";
 import type { PlanningSpec } from "@/lib/planning";
@@ -30,6 +34,14 @@ const PlanningMap = dynamic(() => import("@/components/planning-map"), {
   loading: () => <div className="map-loading">Загружаем карту…</div>,
 });
 
+const resultTabs = [
+  { id: "overview", label: "Сводка" }, { id: "territory", label: "Территория" },
+  { id: "operations", label: "Эксплуатация" }, { id: "energy", label: "Энергетика" },
+  { id: "economics", label: "Экономика" }, { id: "compare", label: "Сравнение" },
+  { id: "evidence", label: "Данные и протокол" },
+] as const;
+type ResultTab = typeof resultTabs[number]["id"];
+
 type Props = {
   activeSpec: PlanningSpec;
   result: Result | null;
@@ -49,16 +61,21 @@ export default function PlanningView({
   provenance,
   onCancel,
 }: Props) {
+  const [tab, setTab] = useState<ResultTab>("overview");
+  const [selectedSite, setSelectedSite] = useState("");
+  const [scenarioFilter, setScenarioFilter] = useState("");
+  const [yearFilter, setYearFilter] = useState<number | null>(null);
   const plan = result?.optimization;
-  const primaryScenario = activeSpec.scenarios[0]?.id ?? "базовый";
-  const firstYear = activeSpec.parameters.years[0] ?? 2027;
+  const primaryScenario = activeSpec.scenarios.some(s => s.id === scenarioFilter) ? scenarioFilter : activeSpec.scenarios[0].id;
+  const firstYear = yearFilter !== null && activeSpec.parameters.years.includes(yearFilter) ? yearFilter : activeSpec.parameters.years[0];
   const yearsLabel =
     activeSpec.parameters.years.length > 1
-      ? `${firstYear}–${activeSpec.parameters.years.at(-1)}`
-      : String(firstYear);
-  const base = plan?.served_kwh[primaryScenario] || 0;
-  const unmet = plan?.unmet_kwh[primaryScenario] || 0;
-  const rate = base + unmet > 0 ? Math.round((base / (base + unmet)) * 100) : 0;
+      ? `${activeSpec.parameters.years[0]}–${activeSpec.parameters.years.at(-1)}`
+      : String(activeSpec.parameters.years[0]);
+  const yearService = plan?.service_by_year?.find(row => row.scenario_id === primaryScenario && row.year === firstYear);
+  const base = yearService?.served_kwh ?? plan?.served_kwh[primaryScenario];
+  const unmet = yearService?.unmet_kwh ?? plan?.unmet_kwh[primaryScenario];
+  const rate = base !== undefined && unmet !== undefined && base + unmet > 0 ? Math.round((base / (base + unmet)) * 100) : null;
   const simulations =
     result?.simulation.filter(
       (s) => s.scenario_id === primaryScenario && s.year === firstYear,
@@ -134,7 +151,9 @@ export default function PlanningView({
 
   return (
     <div className="planning-content">
-      <section className="map-panel" aria-labelledby="map-title">
+      <SectionTabs items={resultTabs} value={tab} onChange={setTab} label="Представления расчёта">
+      {plan && <div className="result-filters"><span>Контекст показателей</span><label>Сценарий<select value={primaryScenario} onChange={e => setScenarioFilter(e.target.value)}>{activeSpec.scenarios.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}</select></label><label>Год<select value={firstYear} onChange={e => setYearFilter(Number(e.target.value))}>{activeSpec.parameters.years.map(year => <option key={year}>{year}</option>)}</select></label><span className="small-caption">NPV — за весь инвестиционный горизонт</span></div>}
+      <section hidden={tab !== "territory" && (Boolean(plan) || tab !== "overview")} className="map-panel" aria-labelledby="map-title">
         <div className="section-head">
           <div>
             <p className="eyebrow">ПРОСТРАНСТВЕННАЯ МОДЕЛЬ</p>
@@ -155,7 +174,10 @@ export default function PlanningView({
           sites={activeSpec.sites}
           zones={activeSpec.zones}
           selected={plan?.selected}
+          activeSiteId={selectedSite}
+          onSelectSite={setSelectedSite}
         />
+        <Territory spec={activeSpec} plan={plan} explanations={result?.explanations} scenario={primaryScenario} selectedSite={selectedSite} onSelect={setSelectedSite} />
       </section>
 
       {error && (
@@ -232,12 +254,18 @@ export default function PlanningView({
             <span className="result-badge">
               <Check size={15} /> Расчёт завершён
             </span>
+            <button type="button" className="secondary-button compact-button" onClick={() => {
+              const file = new Blob([JSON.stringify({ schema_version: "workspace-export-v1", run, result, scenario: activeSpec }, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(file);
+              const link = document.createElement("a"); link.href = url; link.download = `energy-run-${runId || "result"}.json`;
+              link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}><Download size={14} aria-hidden="true" />Экспорт JSON</button>
           </div>
-          <div className="metric-grid">
+          <div className="metric-grid" hidden={tab !== "overview"}>
             <div className="metric-card">
-              <span>Обслуженный спрос</span>
-              <strong>{rate}%</strong>
-              <small>Базовый сценарий · суммарно</small>
+              <span>Обслуживание · оптимизатор</span>
+              <strong>{rate === null ? "—" : `${rate}%`}</strong>
+              <small>{primaryScenario} · {yearService ? firstYear : "весь горизонт"}</small>
             </div>
             <div className="metric-card">
               <span>Выбранные площадки</span>
@@ -247,30 +275,32 @@ export default function PlanningView({
             <div className="metric-card">
               <span>NPV · {primaryScenario}</span>
               <strong>
-                {money(plan.cashflow_rub[primaryScenario] || 0)} <em>млн ₽</em>
+                {plan.cashflow_rub[primaryScenario] === undefined ? "—" : money(plan.cashflow_rub[primaryScenario])} <em>млн ₽</em>
               </strong>
-              <small>По заданным тарифам и затратам</small>
+              <small>Оптимизатор · весь горизонт</small>
             </div>
             <div className="metric-card">
-              <span>p95 ожидания</span>
+              <span>Ожидание · симуляция</span>
               <strong>
                 {avgWait === null ? "—" : `${Math.round(avgWait)} мин`}
               </strong>
               <small>
-                Симуляция · {firstYear} · {simulations.length} seed
+                Среднее p95 · {firstYear} · {simulations.length} прогонов
               </small>
             </div>
           </div>
-          <ResultInsights result={result!} run={run} />
-          <SimulationDistribution runs={result?.simulation || []} />
-          <EnergyAuditDetails
+          <ResultInsights result={result!} run={run} view={tab} />
+          <div hidden={tab !== "operations"}><SimulationDistribution runs={simulations} /></div>
+          <div hidden={tab !== "energy"}><EnergyAuditDetails
+            scenarioId={primaryScenario}
+            yearValue={firstYear}
             rows={plan.energy_audit || []}
             siteNames={Object.fromEntries(
               activeSpec.sites.map((site) => [site.id, site.name]),
             )}
             truncated={plan.verification?.energy_audit_truncated}
-          />
-          <div className="result-lower">
+          /></div>
+          <div className="result-lower" hidden={tab !== "overview" && tab !== "territory"}>
             <div className="detail-card">
               <div className="detail-title">
                 <h3>Этапы строительства</h3>
@@ -323,8 +353,9 @@ export default function PlanningView({
               </div>
               <div className="scenario-bars">
                 {scenarios.map((key) => {
-                  const used = plan.served_kwh[key] || 0,
-                    missed = plan.unmet_kwh[key] || 0;
+                    const used = plan.served_kwh[key],
+                      missed = plan.unmet_kwh[key];
+                    if (used === undefined || missed === undefined) return <div key={key} className="scenario-row"><strong>{key}</strong><span>Нет данных об обслуженной энергии</span></div>;
                   const percent =
                     used + missed ? (used / (used + missed)) * 100 : 0;
                   return (
@@ -364,8 +395,8 @@ export default function PlanningView({
                     <small>
                       Допустимый предел:{" "}
                       {plan.risk_metrics.cvar_loss_rub !== undefined
-                        ? `${precise(activeSpec.parameters.max_cvar_loss_rub ?? 0)} ₽ убытка NPV`
-                        : `${precise(activeSpec.parameters.max_cvar_unmet_kwh ?? 0)} кВт·ч необслуженного спроса`}
+                        ? activeSpec.parameters.max_cvar_loss_rub == null ? "не задан" : `${precise(activeSpec.parameters.max_cvar_loss_rub)} ₽ убытка NPV`
+                        : activeSpec.parameters.max_cvar_unmet_kwh == null ? "не задан" : `${precise(activeSpec.parameters.max_cvar_unmet_kwh)} кВт·ч необслуженного спроса`}
                       . Среднее по худшему хвосту заданных сценариев.
                     </small>
                   </div>
@@ -376,7 +407,7 @@ export default function PlanningView({
               </p>
             </div>
           </div>
-          {Boolean(result?.explanations?.length) && (
+          {tab === "territory" && Boolean(result?.explanations?.length) && (
             <div className="detail-card explanation-card">
               <div className="detail-title">
                 <h3>Почему выбраны площадки</h3>
@@ -396,7 +427,7 @@ export default function PlanningView({
                           ? "Объект закреплён"
                           : lost === undefined
                             ? "Альтернатива не найдена"
-                            : lost > 0
+                            : lost >= 0.5
                               ? `Без объекта: −${number(lost)} кВт·ч обслуживания`
                               : "Спрос может покрыть другая площадка"}
                       </span>
@@ -410,10 +441,11 @@ export default function PlanningView({
               </p>
             </div>
           )}
-          <div className="defense-grid">
+          <div className="defense-grid" hidden={tab !== "compare" && tab !== "evidence"}>
             <section
               className="detail-card defense-card"
               aria-labelledby="alternatives-title"
+              hidden={tab !== "compare"}
             >
               <div className="detail-title">
                 <h3 id="alternatives-title">Основной план и альтернативы</h3>
@@ -432,9 +464,9 @@ export default function PlanningView({
                     <tr>
                       <th scope="col">План</th>
                       <th scope="col">CAPEX всего</th>
-                      <th scope="col">SimPy</th>
-                      <th scope="col">Разрыв</th>
-                      <th scope="col">Статус</th>
+                      <th scope="col">Энергия · симуляция</th>
+                      <th scope="col">Отличие от модели</th>
+                      <th scope="col">Статус решателя</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -482,6 +514,7 @@ export default function PlanningView({
             <section
               className="detail-card defense-card"
               aria-labelledby="quality-title"
+              hidden={tab !== "evidence"}
             >
               <div className="detail-title">
                 <h3 id="quality-title">Качество входа</h3>
@@ -518,10 +551,11 @@ export default function PlanningView({
               )}
             </section>
           </div>
-          <div className="defense-grid">
+          <div className="defense-grid" hidden={tab !== "energy" && tab !== "operations"}>
             <section
               className="detail-card defense-card"
               aria-labelledby="audit-title"
+              hidden={tab !== "energy"}
             >
               <div className="detail-title">
                 <h3 id="audit-title">Энергетический аудит</h3>
@@ -602,6 +636,7 @@ export default function PlanningView({
             <section
               className="detail-card defense-card"
               aria-labelledby="daily-title"
+              hidden={tab !== "operations"}
             >
               <div className="detail-title">
                 <h3 id="daily-title">Работа сети по дням</h3>
@@ -645,14 +680,13 @@ export default function PlanningView({
                 </p>
               )}
               <p className="detail-foot">
-                <Info size={16} /> Один повторяющийся суточный профиль спроса;
-                это модельная проверка, не фактическая история года.
+                <Info size={16} /> Модельная эксплуатация за расчётный период; календарь и происхождение спроса определяются входным сценарием. Это не фактическая история года.
               </p>
             </section>
           </div>
         </section>
       ) : (
-        !runId && (
+        !runId && (tab === "overview" || tab === "territory") && (
           <section className="empty-result">
             <span className="empty-icon">
               <Zap size={24} />
@@ -668,6 +702,8 @@ export default function PlanningView({
           </section>
         )
       )}
+      {!plan && tab !== "overview" && tab !== "territory" && <div className="prerequisite"><h2>Сначала рассчитайте план</h2><p>Этот раздел появится после выполнения расчёта. Исходные площадки уже доступны во вкладке «Территория».</p><button className="secondary-button" onClick={() => setTab("overview")}>К настройке расчёта</button></div>}
+      </SectionTabs>
     </div>
   );
 }
