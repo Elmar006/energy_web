@@ -7,7 +7,7 @@ import mimetypes
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = (ROOT / "docs/assets").resolve()
 FILES = {
-    "/brand-logo.png": ROOT / "frontend/public/brand-logo.png",
+    "/brand-mark.png": ROOT / "frontend/public/brand-mark.png",
     "/fonts/manrope.ttf": ROOT / "frontend/src/app/fonts/manrope-variable.ttf",
     "/fonts/plex.ttf": ROOT / "frontend/src/app/fonts/ibm-plex-sans-variable.ttf",
 }

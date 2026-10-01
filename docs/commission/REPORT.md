@@ -12,7 +12,7 @@
 | Спрос и сегменты | Профили и рост из [синтетического примера](../../examples/demo.json), перенесённые на географические якоря | `assumed`, не зарядные сессии или репрезентативные поездки Monaco |
 | Энергоснабжение, оборудование, цены | Заданные лимиты узлов, подключения, каталог, CAPEX/OPEX и рублёвые тарифы | `assumed`, не технические условия присоединения и не местные цены |
 
-Закреплённый вход: [commission_monaco.json](../../examples/commission_monaco.json). Три зоны спроса, четыре площадки, три сетевых узла; горизонт 2027–2028. Небольшой размер позволяет разбирать решение, но не доказывает масштабируемость на мегаполис. OSM-отметка `observed` обозначает происхождение географии, а не независимое подтверждение энергетических параметров.
+Закреплённый вход: [commission_monaco.json](../../examples/regression/monaco/commission_monaco.json). Три зоны спроса, четыре площадки, три сетевых узла; горизонт 2027–2028. Небольшой размер позволяет разбирать решение, но не доказывает масштабируемость на мегаполис. OSM-отметка `observed` обозначает происхождение географии, а не независимое подтверждение энергетических параметров.
 
 | Отпечаток | SHA-256 |
 |---|---|
@@ -66,7 +66,7 @@ Solver: `optimal`, gap 0 на заданном пространстве канд
 python -m pip install -r engine/requirements-dev.txt
 cd engine
 python -m energy.benchmark \
-  --input ../examples/commission_monaco.json \
+  --input ../examples/regression/monaco/commission_monaco.json \
   --protocol ../docs/evidence/production-2026-09-30/protocol_monaco.json \
   --protocol-lock ../docs/evidence/production-2026-09-30/protocol_monaco.lock.json \
   --output ../data/benchmark/monaco-rerun.json
@@ -76,7 +76,7 @@ python -m energy.benchmark \
 
 При изменении `.py`-исходников engine прежний протокол отклонит несовпадение SHA. Сначала задайте новый протокол и его lock **до запуска**, затем сохраните новый результат. Повторное использование уже известного seed-набора не превращает проверку в независимую предрегистрацию.
 
-Для повторного получения географии используйте фиксированный PBF, проверьте SHA, запустите [build_commission_case.py](../../scripts/build_commission_case.py), подготовьте OSRM-граф по [START_HERE.md](../../START_HERE.md) и примените [routing.py](../../engine/energy/routing.py). Новая версия графа или дорожного профиля может изменить времена: это новый вход, а не тот же эксперимент.
+Для повторного получения географии используйте фиксированный PBF, проверьте SHA, запустите [build_input.py](../../examples/regression/monaco/build_input.py), подготовьте OSRM-граф по [документации дорожной матрицы](../ROUTING.md) и примените [routing.py](../../engine/energy/routing.py). Новая версия графа или дорожного профиля может изменить времена: это новый вход, а не тот же эксперимент.
 
 ## Версии доказательств
 
@@ -85,7 +85,7 @@ python -m energy.benchmark \
 | [Результат 1 октября](../evidence/task-fit-2026-10-01/benchmark_monaco.json) | Свежий повтор текущего движка; базовый Git HEAD `9f674c1`, исходники дополнительно фиксируются SHA |
 | [Протокол проверки 1 октября](../evidence/task-fit-2026-10-01/VERIFICATION.md) | Команды, тесты, хеши снимков и границы проверки |
 | [Результат 30 сентября](../evidence/production-2026-09-30/benchmark_monaco.json) | Предыдущая проверка той же вычислительной версии |
-| [Исторический current](benchmark_monaco_current.json), [protocol](protocol_monaco_current.json), [lock](protocol_monaco_current.lock.json) | Более ранний движок `1ee8fca0…`; цифры не переносятся на новый код |
-| [Первоначальный результат](benchmark_monaco.json), [holdout](benchmark_monaco_holdout.json), [protocol](protocol_monaco.json), [lock](protocol_monaco.lock.json) | История разработки и регрессии; сохраняется неизменной |
+| [Исторический current](../evidence/benchmarks/legacy/benchmark_monaco_current.json), [protocol](../evidence/benchmarks/legacy/protocol_monaco_current.json), [lock](../evidence/benchmarks/legacy/protocol_monaco_current.lock.json) | Более ранний движок `1ee8fca0…`; цифры не переносятся на новый код |
+| [Первоначальный результат](../evidence/benchmarks/legacy/benchmark_monaco.json), [holdout](../evidence/benchmarks/legacy/benchmark_monaco_holdout.json), [protocol](../evidence/benchmarks/legacy/protocol_monaco.json), [lock](../evidence/benchmarks/legacy/protocol_monaco.lock.json) | История разработки и регрессии; сохраняется неизменной |
 
 Свежий запуск занял 87,41 с на локальном Windows-окружении Python 3.12.14, Pyomo 6.9.4, highspy 1.11.0, SimPy 4.1.1 и NumPy 2.3.3. Это время одного компактного кейса; пиковая память в данном запуске не измерялась. Серия больших территорий и переносимость на российский город этим отчётом не подтверждаются.

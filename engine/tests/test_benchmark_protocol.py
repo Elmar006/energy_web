@@ -126,11 +126,11 @@ def test_locked_benchmark_uses_only_evaluation_seeds_and_reports_hash(small_inpu
 
 def test_committed_holdout_artifact_matches_its_locked_protocol():
     root = Path(__file__).resolve().parents[2]
-    folder = root / "docs" / "commission"
+    folder = root / "docs" / "evidence" / "benchmarks" / "legacy"
     protocol = load_locked_protocol(folder / "protocol_monaco.json",
                                     folder / "protocol_monaco.lock.json")
     planning_input = PlanningInput.model_validate_json(
-        (root / "examples" / "commission_monaco.json").read_bytes())
+        (root / "examples" / "regression" / "monaco" / "commission_monaco.json").read_bytes())
     result = json.loads((folder / "benchmark_monaco_holdout.json").read_text(encoding="utf-8"))
     assert input_sha256(planning_input) == protocol.input_sha256
     assert result["metadata"]["input_sha256"] == protocol.input_sha256

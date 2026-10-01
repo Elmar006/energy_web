@@ -142,7 +142,7 @@ test("закреплённый конкурсный кейс проходит о
   await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
   await page.getByRole("button", { name: "Войти" }).click();
   await page.getByText("Импорт готового сценария", { exact: true }).click();
-  await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/commission_monaco.json"));
+  await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/regression/monaco/commission_monaco.json"));
   await expect(page.locator("#workspace-scenario")).toHaveText("commission_monaco");
   await page.getByRole("button", { name: "Рассчитать план" }).click();
   await expect(page.getByText("Расчёт завершён")).toBeVisible({ timeout: 150_000 });

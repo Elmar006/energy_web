@@ -459,7 +459,7 @@ def planning_csv_import(role: str) -> dict:
 
 document = {
     "openapi": "3.1.0",
-    "info": {"title": "EV Infrastructure Planning API", "version": "1.0.0",
+    "info": {"title": "Энергоконтур API", "version": "1.0.0",
              "description": "Public scenario, run and geography API. Engine coordinates and money are explicit in ScenarioSpec."},
     "servers": [{"url": "http://localhost:58080"}],
     "security": [{"bearerAuth": []}],
