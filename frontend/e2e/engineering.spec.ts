@@ -104,7 +104,7 @@ test("парк: таблицы сохраняют связи и экспертн
     await route.fulfill({ json: { status: "optimal", peak_kw: 20, trip_ids_served: ["trip-1"], schedule: [{ bus_id: "bus-1", site_id: "depot", slot: 0, kw: 20 }], end_energy_kwh: { "bus-1": 60 } } });
   });
   await page.goto("/models/fleet");
-  await page.getByText("Полный контракт модели · JSON", { exact: true }).click();
+  await page.getByText("Параметры JSON", { exact: true }).click();
   await page.getByRole("textbox", { name: "FleetSpec JSON" }).fill(JSON.stringify({
     horizon_slots: 8, slot_minutes: 15, efficiency: 0.95, solver_seconds: 30,
     buses: [{ id: "bus-1", battery_kwh: 100, initial_kwh: 60, minimum_kwh: 10, end_target_kwh: 60 }],
@@ -151,4 +151,38 @@ test("основные контрастные пары и клавиатурны
   await page.keyboard.press("Escape");
   await expect(source).toBeFocused();
   await expect(source).toHaveAttribute("aria-expanded", "false");
+});
+
+test("мобильная навигация показывает все четыре раздела без скрытой прокрутки", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/plan");
+  const navigation = page.getByRole("navigation", { name: "Разделы рабочего пространства" });
+  for (const name of ["Планирование", "Данные и версии", "Маршруты", "Отдельные модели"]) {
+    const link = navigation.getByRole("link", { name, exact: true });
+    await expect(link).toBeInViewport();
+    const bounds = await link.boundingBox();
+    expect(bounds!.width).toBeGreaterThanOrEqual(24);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+  }
+  await navigation.getByRole("link", { name: "Отдельные модели", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/models\/corridor$/);
+  await expect(navigation.getByRole("link", { name: "Отдельные модели", exact: true })).toHaveAttribute("aria-current", "page");
+});
+
+test("пустой экран ведёт к загрузке входа до недоступных настроек расчёта", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/plan");
+  const prepare = page.getByRole("link", { name: "Добавить данные" });
+  const run = page.getByRole("button", { name: "Рассчитать план", exact: true });
+  await expect(prepare).toBeInViewport();
+  await expect(run).toBeDisabled();
+  const prepareBounds = await prepare.boundingBox(), runBounds = await run.boundingBox();
+  expect(prepareBounds!.y).toBeLessThan(runBounds!.y);
+  expect(prepareBounds!.height).toBeGreaterThanOrEqual(44);
+  await prepare.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/data\/scenario$/);
+  await expect(page.getByRole("textbox", { name: "Имя новой версии" })).toBeVisible();
 });

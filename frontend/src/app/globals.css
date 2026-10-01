@@ -36,7 +36,8 @@
   --radius: 12px;
   --radius-lg: 16px;
   --radius-full: 999px;
-  --font: var(--font-onest), sans-serif;
+  --font: var(--font-plex-sans), sans-serif;
+  --font-heading: var(--font-manrope), sans-serif;
 }
 
 * {

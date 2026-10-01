@@ -18,7 +18,7 @@ test("API отклоняет чужой Origin и запрос без Origin д�
 test("без сценария нет автоматически созданных площадок и расчётов", async ({ page, baseURL }) => {
   await page.goto("/login");
   await page.getByRole("textbox", { name: "Пароль доступа" }).fill(password);
-  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await page.getByRole("button", { name: "Войти" }).click();
   await expect(page.getByRole("heading", { name: "Данные не загружены" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Рассчитать план" })).toBeDisabled();
   await expect(page.getByText("3 узла", { exact: true })).toHaveCount(0);

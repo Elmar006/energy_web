@@ -62,7 +62,7 @@ export default function WorkspaceApp({
   if (signedIn === null)
     return (
       <main className="screen-centered">
-        <p>Загружаем рабочее пространство…</p>
+        <p role="status">Загрузка…</p>
       </main>
     );
   if (!signedIn) {
@@ -93,21 +93,19 @@ export default function WorkspaceApp({
 
       <main className="workspace" id="workspace-main" tabIndex={-1}>
         <div className="workspace-context">
-          <div><span className="context-kicker">{view === "plan" ? "Планирование" : view === "data" ? "Подготовка данных" : view === "mobility" ? "Транспортный спрос" : "Специальные расчёты"}</span>
-          <h1>{view === "plan" ? "Развитие зарядной сети" : view === "data" ? "Данные и сценарии" : view === "mobility" ? "Спрос из поездок" : model === "fleets/schedule" ? "Транспортный парк" : "Транспортный коридор"}</h1>
-          <p>{view === "plan" ? "Размещение, инвестиции и проверка работы сети" : view === "data" ? "Подготовьте проверяемый вход и сохраните его версию" : view === "mobility" ? "Свяжите поездки и стоянки с потребностью в зарядке" : "Проверка отдельной транспортной задачи"}</p></div>
+          <div><h1>{view === "plan" ? "Планирование" : view === "data" ? "Данные" : view === "mobility" ? "Спрос" : model === "fleets/schedule" ? "Парк" : "Коридор"}</h1></div>
           <div className="context-source"><label htmlFor="workspace-scenario">Источник расчёта</label>
           <Select id="workspace-scenario" label="Источник расчёта" value={selectedScenario?.id ?? ""} onValueChange={(value) => void chooseScenario(value)} options={[
             { value: "", label: "Данные не выбраны" },
             ...(selectedScenario ? [{ value: selectedScenario.id, label: selectedScenario.name }] : []),
             ...savedScenarios.filter(item => item.id !== selectedScenario?.id).map(item => ({ value: item.id, label: item.name })),
           ]} />
-          <span className="context-quality"><Database size={13} aria-hidden="true" />{selectedScenario ? `${provenance.observed} наблюдаемых · ${provenance.derived} вычисленных · ${provenance.assumed} предположенных` : "Загрузите исходные данные или выберите сохранённую версию"}</span></div>
+          {selectedScenario && <span className="context-quality"><Database size={13} aria-hidden="true" />{`${provenance.observed} наблюдаемых · ${provenance.derived} вычисленных · ${provenance.assumed} предположенных`}</span>}</div>
         </div>
         {(view !== "plan" || !activeSpec) && error && <div className="error-banner" role="alert">{error}</div>}
 
         <div className={view === "plan" ? `workspace-grid${activeSpec ? "" : " workspace-start"}` : "workspace-wide"}>
-          {view === "plan" && !activeSpec && <PlanningEmpty />}
+          {view === "plan" && !activeSpec && (runId && !error ? <section className="workspace-loading" role="status"><span className="loading-ring" aria-hidden="true" /><h2>Загрузка расчёта…</h2></section> : <PlanningEmpty />)}
           {view === "plan" && <PlanningControls
             activeSpec={activeSpec}
             loadedScenario={selectedScenario}

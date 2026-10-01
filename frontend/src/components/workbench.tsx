@@ -18,16 +18,15 @@ export default function Workbench(props: Props) {
       <section className="workbench">
         <div className="wb-heading">
           <div>
-            <p className="eyebrow">РАБОЧИЕ ИНСТРУМЕНТЫ</p>
             <h2>
               {view === "data"
                 ? section === "editor" ? "Редактор сценария" : section === "csv" ? "Табличные источники" : section === "geo" ? "Территория и геоданные" : "Заявки и календарь"
                 : view === "mobility"
-                  ? "Потенциальный спрос из маршрутов"
-                  : "Отдельные модели"}
+                  ? "Поездки и стоянки"
+                  : "Параметры"}
             </h2>
           </div>
-          <span className="wb-context-label">{scenario ? "Выбранная версия" : "Новый вход"}</span>
+          <span className="wb-context-label">{scenario ? scenario.name : "Черновик"}</span>
         </div>
         {view === "data" && (
           <>

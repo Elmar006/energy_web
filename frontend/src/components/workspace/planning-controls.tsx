@@ -80,8 +80,7 @@ export default function PlanningControls({
           <Activity size={18} />
         </span>
         <div>
-          <p className="eyebrow">ПАРАМЕТРЫ РАСЧЁТА</p>
-          <h2 id="scenario-title">{loadedScenario ? "Условия запуска" : "Настроить сценарий"}</h2>
+          <h2 id="scenario-title">{loadedScenario ? "Условия" : "Импорт сценария"}</h2>
         </div>
         {result && <button type="button" className="parameters-toggle secondary-button compact-button" aria-controls="planning-parameters-body" aria-expanded={!collapsed} onClick={() => setExpandedResult(collapsed ? result : null)}>{collapsed ? "Развернуть" : "Свернуть"}</button>}
       </div>
@@ -106,7 +105,7 @@ export default function PlanningControls({
         <small>
           {uploading
             ? "Проверяем и сохраняем…"
-            : "Площадки, спрос, сеть, тарифы и происхождение данных проверяются перед сохранением."}
+            : "Загрузите JSON с площадками, спросом и ограничениями сети."}
         </small>
       </details>
       {loadedScenario && (
@@ -118,7 +117,7 @@ export default function PlanningControls({
             предположенных.
           </span>
           {activeSpec?.datasets?.length ? (
-            <ul>
+            <details className="source-manifest"><summary>Источники · {activeSpec.datasets.length}</summary><ul>
               {activeSpec?.datasets.map((dataset) => (
                 <li key={dataset.sha256}>
                   <strong>
@@ -128,7 +127,7 @@ export default function PlanningControls({
                   <code>SHA-256 {dataset.sha256.slice(0, 12)}…</code>
                 </li>
               ))}
-            </ul>
+            </ul></details>
           ) : (
             <span>
               Манифест исходных файлов не указан. Смотрите происхождение у
@@ -253,8 +252,8 @@ export default function PlanningControls({
       <p className="panel-disclaimer">
         <Info size={15} />{" "}
         {loadedScenario
-          ? "Происхождение записей задаётся автором файла; техническая проверка формата не подтверждает достоверность исходных данных."
-          : "Данные не загружены. Расчёт требует явно сохранённого входа."}{" "}
+          ? "Источники указаны автором файла. Проверка формата не подтверждает их достоверность."
+          : "Без исходных данных запуск недоступен."}{" "}
         Результат не является согласованием подключения.
       </p>
       </div>

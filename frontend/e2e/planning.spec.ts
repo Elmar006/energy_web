@@ -31,7 +31,7 @@ test("карта 2ГИС загружает сценарные маркеры и
   }));
   await page.goto("/");
   await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
-  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await page.getByRole("button", { name: "Войти" }).click();
 
   await expect(page.getByRole("heading", { name: "Данные не загружены" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Рассчитать план" })).toBeDisabled();
@@ -56,8 +56,8 @@ test("мобильный сценарий доступен от входа до 
   await page.goto("/");
 
   await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
-  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
-  await expect(page.getByRole("heading", { name: "Развитие зарядной сети" })).toBeVisible();
+  await page.getByRole("button", { name: "Войти" }).click();
+  await expect(page.getByRole("heading", { name: "Планирование" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Выйти из рабочего пространства" })).toBeVisible();
 
   await expect(page.getByRole("heading", { name: "Данные не загружены" })).toBeVisible();
@@ -124,7 +124,7 @@ test("мобильный сценарий доступен от входа до 
 test("пользовательский JSON загружается, проверяется и рассчитывается", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
-  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await page.getByRole("button", { name: "Войти" }).click();
   await page.getByText("Импорт готового сценария", { exact: true }).click();
   await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/import_sample.json"));
   await expect(page.locator("#workspace-scenario")).toHaveText("import_sample");
@@ -140,7 +140,7 @@ test("пользовательский JSON загружается, провер
 test("закреплённый конкурсный кейс проходит от загрузки до проверяемого экрана", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
-  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await page.getByRole("button", { name: "Войти" }).click();
   await page.getByText("Импорт готового сценария", { exact: true }).click();
   await page.locator("#scenario-file").setInputFiles(resolve(__dirname, "../../examples/commission_monaco.json"));
   await expect(page.locator("#workspace-scenario")).toHaveText("commission_monaco");
@@ -168,7 +168,7 @@ test("закреплённый конкурсный кейс проходит о
 test("ограничение CVaR видно в результате, а несовместимые условия не выдаются за план", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("textbox", { name: "Пароль доступа" }).fill(process.env.APP_ACCESS_PASSWORD ?? process.env.APP_DEMO_PASSWORD ?? "");
-  await page.getByRole("button", { name: "Открыть рабочее пространство" }).click();
+  await page.getByRole("button", { name: "Войти" }).click();
   const spec = JSON.parse(readFileSync(resolve(__dirname, "../../examples/import_sample.json"), "utf8"));
   spec.id = "e2e-city-cvar";
   spec.scenarios = [

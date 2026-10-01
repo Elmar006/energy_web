@@ -28,7 +28,7 @@ test("разделы и вложенные вкладки открываются
   });
   await page.goto("/plan");
   await expect(
-    page.getByRole("heading", { name: "Развитие зарядной сети" }),
+    page.getByRole("heading", { name: "Планирование" }),
   ).toBeVisible();
   await page.evaluate(() => {
     (window as typeof window & { workspaceDocumentMarker?: number }).workspaceDocumentMarker = 1;

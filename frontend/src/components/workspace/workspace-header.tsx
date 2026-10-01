@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { LogOut, PanelsTopLeft, Database, Route, Network } from "lucide-react";
+import { brand } from "@/lib/brand";
 
 type View = "plan" | "data" | "mobility" | "models";
 
@@ -30,12 +31,11 @@ export default function WorkspaceHeader({
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark small">
-            <Image src="/icon.svg" width={34} height={34} alt="" />
+            <Image src={brand.logo} width={34} height={34} alt="" />
           </span>
-          <strong>EV Infrastructure</strong>
+          <strong>{brand.name}</strong>
         </div>
       </header>
-      <p className="rail-label">Рабочее пространство</p>
       <nav className="app-nav" aria-label="Разделы рабочего пространства">
         {navigation.map(({ id, href, label, shortLabel, icon: Icon }) => (
           <Link
@@ -49,8 +49,7 @@ export default function WorkspaceHeader({
           </Link>
         ))}
       </nav>
-      <div className="rail-foot"><span>EV Infrastructure</span><p>Планирование зарядной сети</p></div>
-      <div className="rail-account"><span><span className="account-monogram" aria-hidden="true">EV</span><span>Рабочая сессия<small>Общий доступ</small></span></span><button type="button" className="logout-button" onClick={() => void onLogout()} title="Выйти" aria-label="Выйти из рабочего пространства"><LogOut size={16} aria-hidden="true" /></button></div>
+      <div className="rail-account"><span><span className="account-monogram" aria-hidden="true">ЭК</span><span>Доступ команды</span></span><button type="button" className="logout-button" onClick={() => void onLogout()} title="Выйти" aria-label="Выйти из рабочего пространства"><LogOut size={16} aria-hidden="true" /></button></div>
     </aside>
   );
 }

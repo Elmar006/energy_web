@@ -25,9 +25,7 @@ export default function ModelsSection() {
       {view === "models" && (
         <div className="wb-body">
           <p className="wb-note">
-            <Info size={17} /> Модели коридора и парка работают отдельно от
-            городского плана и требуют собственных входов. Общие посты и бюджет
-            между ними не распределяются.
+            <Info size={17} aria-hidden="true" /> Посты и бюджет этого расчёта не объединяются с городским планом.
           </p>
           <div className="wb-segment">
             <Link
@@ -48,11 +46,7 @@ export default function ModelsSection() {
               Парк
             </Link>
           </div>
-          <p className="wb-help">
-            {model === "corridors/check"
-              ? "Задайте длину маршрута, характеристики автомобиля и станции по пути."
-              : "Добавьте машины, назначенные рейсы и доступные окна зарядки. Время задаётся номерами интервалов от начала горизонта."}
-          </p>
+          {model === "fleets/schedule" && <p className="wb-help">Время рейсов и зарядки — номера интервалов от начала горизонта.</p>}
           <fieldset className="model-inputs" disabled={busy}>
           <legend className="sr-only">Параметры отдельной модели</legend>
           <ModelFields
@@ -61,7 +55,7 @@ export default function ModelsSection() {
             onChange={value => { setModelJson(value); setModelResult(null); }}
           />
           <details className="wb-advanced">
-            <summary>Полный контракт модели · JSON</summary>
+            <summary>Параметры JSON</summary>
             <JsonEditor
               label={
                 model === "corridors/check"

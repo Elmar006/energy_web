@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import NetworkFigure from "./network-figure";
+import { brand } from "@/lib/brand";
 
 export default function LoginPanel({
   password,
@@ -18,15 +19,12 @@ export default function LoginPanel({
   return (
     <main className="login-screen">
       <section className="login-story" aria-label="О платформе">
-        <div className="login-brand"><Image src="/icon.svg" width={40} height={40} alt="" /><span>EV Infrastructure</span></div>
-        <div className="login-story-content"><span className="empty-label">Планирование зарядной сети</span><h2>Где строить.<br />Как развивать.</h2><p>От исходных данных — к размещению, энергоснабжению и инвестициям.</p><NetworkFigure /></div>
-        <span className="login-story-foot">Данные. Модель. Проверяемое решение.</span>
+        <div className="login-brand"><Image src={brand.logo} width={40} height={40} alt="" /><span>{brand.name}</span></div>
+        <div className="login-story-content"><h2>Планирование<br />инфраструктуры</h2><NetworkFigure /></div>
       </section>
       <div className="login-form-area">
       <div className="login-panel">
-        <p className="eyebrow">EV Infrastructure</p>
-        <h1>Рабочее<br />пространство</h1>
-        <p>Введите пароль для доступа к сценариям и расчётам.</p>
+        <h1>Вход</h1>
         <form onSubmit={(event) => void onSubmit(event)}>
           <label htmlFor="password">Пароль доступа</label>
           <input
@@ -40,7 +38,7 @@ export default function LoginPanel({
             required
           />
           <button className="primary-button" type="submit">
-            Открыть рабочее пространство <ArrowRight size={17} />
+            Войти <ArrowRight size={17} aria-hidden="true" />
           </button>
         </form>
         {error && (
@@ -48,7 +46,6 @@ export default function LoginPanel({
             {error}
           </p>
         )}
-        <p className="login-access-note">Доступ предоставляется вашей командой.</p>
       </div>
       </div>
     </main>

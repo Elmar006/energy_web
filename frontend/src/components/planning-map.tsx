@@ -110,9 +110,9 @@ export default function PlanningMap({ selected, sites, zones, activeSiteId, onSe
 
   return <div className="map-frame" role="group" aria-label="Карта территории сценария">
     <div ref={holder} className="map-canvas" aria-hidden={status !== "ready"} />
-    {status === "loading" && <div className="map-state"><div className="map-state-icon"><MapPin size={22} /></div><strong>Открываем карту территории</strong><span>Подключаем картографический слой 2ГИС</span></div>}
+    {status === "loading" && <div className="map-state"><div className="map-state-icon"><MapPin size={22} /></div><strong>Загрузка карты…</strong></div>}
     {status === "missing-key" && <div className="map-state"><div className="map-state-icon"><MapPin size={22} /></div><strong>Карта ожидает подключения</strong><span>Добавьте ключ 2ГИС MapGL в настройки развёртывания.</span><a href="https://docs.2gis.com/mapgl/start/first-steps" target="_blank" rel="noreferrer">Как получить ключ <ArrowUpRight size={15} /></a></div>}
-    {status === "error" && <div className="map-state"><div className="map-state-icon"><MapPin size={22} /></div><strong>Карта сейчас недоступна</strong><span>Проверьте ключ 2ГИС MapGL, доступ к Map Tiles API и разрешённый домен.</span></div>}
+    {status === "error" && <div className="map-state"><div className="map-state-icon"><MapPin size={22} /></div><strong>Карта недоступна</strong><span>Проверьте ключ 2ГИС MapGL, доступ к Map Tiles API и разрешённый домен.</span></div>}
     {status === "ready" && <div className="map-zoom" aria-label="Масштаб карты"><button type="button" onClick={() => zoom(1)} aria-label="Приблизить карту"><Plus size={17} /></button><button type="button" onClick={() => zoom(-1)} aria-label="Отдалить карту"><Minus size={17} /></button></div>}
     {active && status === "ready" && <div className="map-detail"><div><span>{active.kind === "site" ? "ИНФРАСТРУКТУРА" : "СПРОС"}</span><strong>{active.name}</strong><small>{active.subtitle}</small></div><button type="button" onClick={() => setActive(null)} aria-label="Закрыть сведения">×</button></div>}
     <div className="map-key" aria-label="Обозначения на карте"><span><i className="key-dot selected" />Выбрано</span><span><i className="key-dot candidate" />Кандидат</span><span><i className="key-dot demand" />Спрос</span></div>

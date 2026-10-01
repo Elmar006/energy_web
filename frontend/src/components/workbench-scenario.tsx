@@ -1,7 +1,7 @@
 "use client";
 
 import { useWorkbench } from "./workbench-state";
-import { ArrowRight, Info } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import ScenarioFields from "@/components/scenario-fields";
 import { pretty, JsonEditor } from "./workbench-shared";
 
@@ -21,9 +21,6 @@ export default function ScenarioSection() {
     <>
       {section === "editor" && (
         <div className="wb-body">
-          <p className="wb-note">
-            <Info size={17} aria-hidden="true" /> Сохранённая версия фиксирует параметры и происхождение данных. После проверки её можно использовать в расчёте.
-          </p>
           <label className="wb-field">
             <span>Имя новой версии</span>
             <input

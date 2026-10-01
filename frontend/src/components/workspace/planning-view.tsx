@@ -36,9 +36,9 @@ const PlanningMap = dynamic(() => import("@/components/planning-map"), {
 
 const resultTabs = [
   { id: "overview", label: "Сводка" }, { id: "territory", label: "Территория" },
-  { id: "operations", label: "Эксплуатация" }, { id: "energy", label: "Энергетика" },
+  { id: "operations", label: "Эксплуатация", compactLabel: "Работа" }, { id: "energy", label: "Энергетика", compactLabel: "Энергия" },
   { id: "economics", label: "Экономика" }, { id: "compare", label: "Сравнение" },
-  { id: "evidence", label: "Данные и протокол" },
+  { id: "evidence", label: "Данные и протокол", compactLabel: "Протокол" },
 ] as const;
 type ResultTab = typeof resultTabs[number]["id"];
 
@@ -152,11 +152,10 @@ export default function PlanningView({
   return (
     <div className="planning-content">
       <SectionTabs items={resultTabs} value={tab} onChange={setTab} label="Представления расчёта">
-      {plan && <div className="result-filters"><span>Контекст показателей</span><label>Сценарий<select value={primaryScenario} onChange={e => setScenarioFilter(e.target.value)}>{activeSpec.scenarios.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}</select></label><label>Год<select value={firstYear} onChange={e => setYearFilter(Number(e.target.value))}>{activeSpec.parameters.years.map(year => <option key={year}>{year}</option>)}</select></label><span className="small-caption">NPV — за весь инвестиционный горизонт</span></div>}
+      {plan && <div className="result-filters"><label>Сценарий<select value={primaryScenario} onChange={e => setScenarioFilter(e.target.value)}>{activeSpec.scenarios.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}</select></label><label>Год<select value={firstYear} onChange={e => setYearFilter(Number(e.target.value))}>{activeSpec.parameters.years.map(year => <option key={year}>{year}</option>)}</select></label><span className="small-caption">NPV — за весь инвестиционный горизонт</span></div>}
       <section hidden={tab !== "territory" && (Boolean(plan) || tab !== "overview")} className="map-panel" aria-labelledby="map-title">
         <div className="section-head">
           <div>
-            <p className="eyebrow">ПРОСТРАНСТВЕННАЯ МОДЕЛЬ</p>
             <h2 id="map-title">Площадки и зоны спроса</h2>
           </div>
           <span className="section-meta">
@@ -192,10 +191,9 @@ export default function PlanningView({
           <section className="calculating" role="status" aria-live="polite">
             <span className="loading-orbit" />
             <div>
-              <strong>Рассчитываем инфраструктуру</strong>
+              <strong>Расчёт плана</strong>
               <p>
-                Проверяем бюджет, энергосеть и работу станций. Состояние:{" "}
-                {run?.state === "running" ? "выполняется" : "в очереди"}.
+                {run?.state === "running" ? "Выполняется" : "В очереди"}
               </p>
             </div>
             <button
@@ -243,13 +241,7 @@ export default function PlanningView({
         >
           <div className="results-heading">
             <div>
-              <p className="eyebrow">
-                РЕЗУЛЬТАТ /{" "}
-                {plan.status === "optimal"
-                  ? "ОПТИМАЛЬНОЕ РЕШЕНИЕ"
-                  : "ДОПУСТИМОЕ РЕШЕНИЕ"}
-              </p>
-              <h2 id="results-title">План развития сети</h2>
+              <h2 id="results-title">Результат</h2>
             </div>
             <span className="result-badge">
               <Check size={15} /> Расчёт завершён
@@ -518,12 +510,11 @@ export default function PlanningView({
             >
               <div className="detail-title">
                 <h3 id="quality-title">Качество входа</h3>
-                <span className="small-caption">источник решения</span>
               </div>
               <p className="quality-callout">
                 {result?.metadata?.input_quality?.demand_scope ===
                 "served_sessions_only"
-                  ? "История выполненных зарядок; скрытый необслуженный спрос неизвестен."
+                  ? "История сессий не учитывает неудовлетворённый спрос."
                   : result?.metadata?.input_quality?.demand_scope ===
                       "mobility_potential"
                     ? "Потенциальная публичная потребность рассчитана из переданных маршрутов, а не измерена для всего города."
