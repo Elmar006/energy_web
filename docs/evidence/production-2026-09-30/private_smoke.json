@@ -1,0 +1,10 @@
+{
+  "status": "succeeded",
+  "run_id": "62aea7ec-ed9d-40aa-9797-8a03071554b4",
+  "scenario_id": "3fde95f0-abeb-4bb9-a65d-965d82624c67",
+  "artifact_sha256": "e646389e7ce33ff628938bd65ef2a525669dd43c93635ae93e065bcc69155db6",
+  "engine_source_sha256": "76c410c13022ba8816b644f28e35f3735f60e869cdfc3b4828fc7b436f26fc2e",
+  "physical_verification_passed": true,
+  "secure_cookie_verified": true,
+  "label": "assumed deployment fixture"
+}

@@ -38,10 +38,8 @@ export default function CsvSection() {
     <>
       {section === "csv" && (
         <div className="wb-body">
-          <p className="wb-note">
-            <Info size={17} /> CSV применяется к выбранному сохранённому
-            сценарию и создаёт новый. Метка «наблюдалось» задаётся поставщиком.
-          </p>
+          {!scenario && <div className="prerequisite" role="note"><strong>Сначала выберите сохранённый сценарий</strong><p>Выберите его вверху страницы или создайте новый.</p><Link className="secondary-button" href="/data/scenario">Создать сценарий</Link></div>}
+          {scenario && <p className="wb-note"><Info size={17} aria-hidden="true" /> Импорт создаст новую версию сценария. Происхождение данных указывает поставщик.</p>}
           <div className="wb-segment">
             <Link
               href={`/data/csv/sessions${scenario ? `?scenario=${scenario.id}` : ""}`}
@@ -57,14 +55,14 @@ export default function CsvSection() {
             </Link>
           </div>
           <p className="wb-help">
-            Родитель:{" "}
+            Сценарий:{" "}
             <strong>{scenario?.name || "сначала сохраните сценарий"}</strong>.{" "}
             {csvType === "sessions"
               ? "Зоны: " +
-                spec.zones.map((item) => item.id).join(", ") +
-                ". CSV: session_id,zone_id,started_at,ended_at,energy_kwh. История не раскрывает скрытый спрос."
+                (spec?.zones ?? []).map((item) => item.id).join(", ") +
+                ". CSV: session_id,zone_id,started_at,ended_at,energy_kwh. История сессий не учитывает неудовлетворённый спрос."
               : "Узлы: " +
-                spec.grid_nodes.map((item) => item.id).join(", ") +
+                (spec?.grid_nodes ?? []).map((item) => item.id).join(", ") +
                 ". CSV: grid_node_id,hour,headroom_kw; все часы 0–23."}
           </p>
           {metadata}

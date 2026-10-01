@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: energy
       POSTGRES_USER: energy
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-energy_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./backend/migrations/001_init.sql:/docker-entrypoint-initdb.d/20-energy.sql:ro
@@ -46,7 +46,7 @@ services:
     build: ./backend
     entrypoint: ["/migrate"]
     environment:
-      DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:-energy_dev}@db:5432/energy?sslmode=disable
+      DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/energy?sslmode=disable
     depends_on:
       db: {condition: service_healthy}
     restart: "no"
@@ -54,10 +54,10 @@ services:
   api:
     build: ./backend
     environment:
-      DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:-energy_dev}@db:5432/energy?sslmode=disable
-      API_TOKEN: ${API_TOKEN:-local-development-token-change-before-deploy}
+      DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/energy?sslmode=disable
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN}
       APP_ENV: ${APP_ENV:-development}
-      ALLOW_INSECURE_DEMO_TOKEN: ${ALLOW_INSECURE_DEMO_TOKEN:-1}
+      ALLOW_INSECURE_DEMO_TOKEN: ${ALLOW_INSECURE_DEMO_TOKEN:-0}
       API_ADDR: :8080
       REDIS_ADDR: redis:6379
       ENGINE_URL: http://engine:8090
@@ -75,8 +75,9 @@ services:
     build: ./backend
     entrypoint: ["/worker"]
     environment:
-      DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:-energy_dev}@db:5432/energy?sslmode=disable
+      DATABASE_URL: postgres://energy:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/energy?sslmode=disable
       ENGINE_URL: http://engine:8090
+      APP_ENV: ${APP_ENV:-development}
       ARTIFACT_DIR: /data/artifacts
     volumes:
       - artifact_data:/data/artifacts
@@ -88,8 +89,12 @@ services:
     build: ./frontend
     environment:
       ENERGY_API_URL: http://api:8080
-      API_TOKEN: ${API_TOKEN:-local-development-token-change-before-deploy}
-      APP_DEMO_PASSWORD: ${APP_DEMO_PASSWORD:-demo-local-password}
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN}
+      APP_ACCESS_PASSWORD: ${APP_ACCESS_PASSWORD:-${APP_DEMO_PASSWORD:?Set APP_ACCESS_PASSWORD}}
+      APP_ENV: ${APP_ENV:-development}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      ALLOW_INSECURE_DEMO_TOKEN: ${ALLOW_INSECURE_DEMO_TOKEN:-0}
+      APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-false}
       DGIS_MAPGL_API_KEY: ${DGIS_MAPGL_API_KEY:-}
       DGIS_MAP_STYLE_ID: ${DGIS_MAP_STYLE_ID:-}
     depends_on:

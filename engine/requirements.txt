@@ -1,10 +1,9 @@
-fastapi==0.117.1
+fastapi==0.142.2
+starlette==1.7.0
 uvicorn==0.36.0
 pydantic==2.11.9
 pyomo==6.9.4
 highspy==1.11.0
 simpy==4.1.1
 numpy==2.3.3
-pytest==8.4.2
-httpx==0.28.1
 tzdata==2026.4

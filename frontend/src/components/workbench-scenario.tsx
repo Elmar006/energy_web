@@ -1,7 +1,7 @@
 "use client";
 
 import { useWorkbench } from "./workbench-state";
-import { ArrowRight, Info } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import ScenarioFields from "@/components/scenario-fields";
 import { pretty, JsonEditor } from "./workbench-shared";
 
@@ -21,11 +21,6 @@ export default function ScenarioSection() {
     <>
       {section === "editor" && (
         <div className="wb-body">
-          <p className="wb-note">
-            <Info size={17} /> Полный PlanningInput. Отредактируйте значения и
-            происхождение; сервер проверит контракт и создаст новый неизменяемый
-            снимок.
-          </p>
           <label className="wb-field">
             <span>Имя новой версии</span>
             <input
@@ -57,7 +52,7 @@ export default function ScenarioSection() {
             </button>
             <button
               className="secondary-button"
-              onClick={() => setSpecJson(pretty(spec))}
+              onClick={() => setSpecJson(pretty(spec ?? { id: "", zones: [], sites: [], grid_nodes: [], options: [], travel_edges: [], scenarios: [], parameters: { years: [], annual_budgets_rub: [] } }))}
             >
               Вернуть выбранный вход
             </button>

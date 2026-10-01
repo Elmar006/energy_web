@@ -15,7 +15,7 @@ def test_legacy_input_identity_ignores_absent_additive_demand_fields(small_input
     assert snapshot["demand_dataset"] is None
     assert snapshot["service_calendar"] is None
     assert snapshot["charging_requests"] == []
-    for name in ("demand_dataset", "service_calendar", "charging_requests"):
+    for name in ("demand_dataset", "service_calendar", "charging_requests", "site_travel_edges", "operational_outages"):
         snapshot.pop(name)
     canonical = json.dumps(snapshot, ensure_ascii=False, sort_keys=True,
                            separators=(",", ":")).encode("utf-8")
@@ -183,7 +183,7 @@ def test_validation_executes_every_seed_and_propagates_overrides_to_all_stages(s
     # normalizes numeric input (including unvalidated model defaults) on ingress.
     normalized_source = CalculationRequest.model_validate({"input": original}).input
     source_snapshot = normalized_source.model_dump(mode="json")
-    for name in ("demand_dataset", "service_calendar", "charging_requests"):
+    for name in ("demand_dataset", "service_calendar", "charging_requests", "site_travel_edges", "operational_outages"):
         source_snapshot.pop(name)
     source_canonical = json.dumps(source_snapshot, ensure_ascii=False, sort_keys=True,
                                   separators=(",", ":")).encode("utf-8")
@@ -263,3 +263,14 @@ def test_source_manifest_includes_nested_python_files_and_changes_with_source(tm
     assert engine_source_manifest()[0] == first_digest
     source.write_text("changed", encoding="utf-8")
     assert engine_source_manifest()[0] != first_digest
+
+
+def test_operational_inputs_change_identity_only_when_they_change_behaviour(small_input):
+    original = input_sha256(small_input)
+    explicit_empty = small_input.model_copy(update={"site_travel_edges": [], "operational_outages": []})
+    assert input_sha256(explicit_empty) == original
+    payload = small_input.model_dump(mode="json")
+    payload["operational_outages"] = [{"site_id": small_input.sites[0].id, "start_minute": 1,
+        "repair_minute": 2, "provenance": {"kind": "assumed", "source": "reproducibility test"}}]
+    changed = type(small_input).model_validate(payload)
+    assert input_sha256(changed) != original

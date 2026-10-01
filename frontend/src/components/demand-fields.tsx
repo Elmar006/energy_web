@@ -1,16 +1,10 @@
 "use client";
 
 import Select from "@/components/ui/select";
+import CalendarDates from "@/components/ui/calendar-dates";
 
 type Obj = Record<string, unknown>;
 const pretty = (value: unknown) => JSON.stringify(value, null, 2);
-const dates = (value: unknown) =>
-  Array.isArray(value) ? value.join(", ") : "";
-const split = (value: string) =>
-  value
-    .split(/[,\s]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
 function Field({
   label,
   value,
@@ -89,11 +83,7 @@ export function MobilityFields({
           value={String(input.time_zone || "")}
           onChange={(next) => update("time_zone", next)}
         />
-        <Field
-          label="Покрытые дни, YYYY-MM-DD через запятую"
-          value={dates(input.covered_dates)}
-          onChange={(next) => update("covered_dates", split(next))}
-        />
+        <CalendarDates dates={Array.isArray(input.covered_dates) ? input.covered_dates as string[] : []} onChange={next => update("covered_dates", next)} />
         <Field
           label="Источник маршрутов"
           value={String(input.source || "")}
@@ -165,11 +155,7 @@ export function DatedFields({
           value={String(calendar.time_zone || "")}
           onChange={(next) => updateCalendar("time_zone", next)}
         />
-        <Field
-          label="Покрытые дни, YYYY-MM-DD через запятую"
-          value={dates(calendar.covered_dates)}
-          onChange={(next) => updateCalendar("covered_dates", split(next))}
-        />
+        <CalendarDates dates={Array.isArray(calendar.covered_dates) ? calendar.covered_dates as string[] : []} onChange={next => updateCalendar("covered_dates", next)} />
         <label className="wb-field">
           <span>Множитель годовой экстраполяции · предположение</span>
           <input
@@ -211,8 +197,7 @@ export function DatedFields({
         }
       />
       <p className="wb-help">
-        Остальные зоны явно остаются на повторяемом 24-часовом профиле. Заявки и
-        окна прибытия/дедлайна заполните в JSON ниже.
+        Остальные зоны используют повторяемый 24-часовой профиль. Заявки, прибытия и крайние сроки зарядки — в JSON ниже.
       </p>
     </div>
   );

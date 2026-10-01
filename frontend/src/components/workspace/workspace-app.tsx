@@ -4,7 +4,9 @@ import Workbench from "@/components/workbench";
 import PlanningView from "./planning-view";
 import PlanningControls from "./planning-controls";
 import WorkspaceHeader from "./workspace-header";
-import WorkspaceIntro from "./workspace-intro";
+import Select from "@/components/ui/select";
+import { Database } from "lucide-react";
+import PlanningEmpty from "./planning-empty";
 import LoginPanel from "./login-panel";
 import { useWorkspace } from "./workspace-state";
 
@@ -29,12 +31,6 @@ export default function WorkspaceApp({
     signedIn,
     password,
     setPassword,
-    mode,
-    setMode,
-    budget,
-    setBudget,
-    demand,
-    setDemand,
     savedScenarios,
     loadedScenario,
     uploading,
@@ -66,7 +62,7 @@ export default function WorkspaceApp({
   if (signedIn === null)
     return (
       <main className="screen-centered">
-        <p>Загружаем рабочее пространство…</p>
+        <p role="status">Загрузка…</p>
       </main>
     );
   if (!signedIn) {
@@ -80,35 +76,41 @@ export default function WorkspaceApp({
     );
   }
 
-  const firstYear = activeSpec.parameters.years[0] ?? 2027;
+  const selectedScenario = activeSpec ? loadedScenario : null;
+  const firstYear = activeSpec?.parameters.years[0];
   const yearsLabel =
-    activeSpec.parameters.years.length > 1
+    activeSpec && activeSpec.parameters.years.length > 1
       ? `${firstYear}–${activeSpec.parameters.years.at(-1)}`
-      : String(firstYear);
+      : firstYear === undefined ? "—" : String(firstYear);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell engineering-shell">
       <WorkspaceHeader
         view={view}
-        scenarioId={loadedScenario?.id}
+        scenarioId={selectedScenario?.id}
         onLogout={logout}
       />
 
-      <main className="workspace">
-        <WorkspaceIntro scenarioName={loadedScenario?.name} />
+      <main className="workspace" id="workspace-main" tabIndex={-1}>
+        <div className="workspace-context">
+          <div><h1>{view === "plan" ? "Планирование" : view === "data" ? "Данные" : view === "mobility" ? "Спрос" : model === "fleets/schedule" ? "Парк" : "Коридор"}</h1></div>
+          <div className="context-source"><label htmlFor="workspace-scenario">Источник расчёта</label>
+          <Select id="workspace-scenario" label="Источник расчёта" value={selectedScenario?.id ?? ""} onValueChange={(value) => void chooseScenario(value)} options={[
+            { value: "", label: "Данные не выбраны" },
+            ...(selectedScenario ? [{ value: selectedScenario.id, label: selectedScenario.name }] : []),
+            ...savedScenarios.filter(item => item.id !== selectedScenario?.id).map(item => ({ value: item.id, label: item.name })),
+          ]} />
+          {selectedScenario && <span className="context-quality"><Database size={13} aria-hidden="true" />{`${provenance.observed} наблюдаемых · ${provenance.derived} вычисленных · ${provenance.assumed} предположенных`}</span>}</div>
+        </div>
+        {(view !== "plan" || !activeSpec) && error && <div className="error-banner" role="alert">{error}</div>}
 
-        <div className="workspace-grid">
-          <PlanningControls
+        <div className={view === "plan" ? `workspace-grid${activeSpec ? "" : " workspace-start"}` : "workspace-wide"}>
+          {view === "plan" && !activeSpec && (runId && !error ? <section className="workspace-loading" role="status"><span className="loading-ring" aria-hidden="true" /><h2>Загрузка расчёта…</h2></section> : <PlanningEmpty />)}
+          {view === "plan" && <PlanningControls
             activeSpec={activeSpec}
-            loadedScenario={loadedScenario}
+            loadedScenario={selectedScenario}
             savedScenarios={savedScenarios}
             provenance={provenance}
-            mode={mode}
-            setMode={setMode}
-            budget={budget}
-            setBudget={setBudget}
-            demand={demand}
-            setDemand={setDemand}
             yearsLabel={yearsLabel}
             runMode={runMode}
             setRunMode={setRunMode}
@@ -128,9 +130,9 @@ export default function WorkspaceApp({
             chooseScenario={chooseScenario}
             uploadScenario={uploadScenario}
             start={start}
-          />
+          />}
 
-          <div className="main-column">
+          <div className="main-column" hidden={view === "plan" && !activeSpec}>
             {view !== "plan" && (
               <Workbench
                 key={
@@ -142,18 +144,18 @@ export default function WorkspaceApp({
                   ":" +
                   csvType +
                   ":" +
-                  (loadedScenario?.id ?? "demo")
+                  (selectedScenario?.id ?? "empty")
                 }
                 view={view}
                 section={section}
                 model={model}
                 csvType={csvType}
                 spec={activeSpec}
-                scenario={loadedScenario}
+                scenario={selectedScenario}
                 onSaved={acceptScenario}
               />
             )}
-            {view === "plan" && (
+            {view === "plan" && activeSpec && (
               <PlanningView
                 activeSpec={activeSpec}
                 result={result}

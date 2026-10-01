@@ -1,32 +1,20 @@
+import { BodyTooLarge, readLimitedJson } from "../../../../runtime/body.mjs";
 import { randomUUID } from "node:crypto";
 import { callBackend, isSignedIn } from "@/lib/server";
-import { makeDemo, type Mode } from "@/lib/demo";
 
 export async function POST(request: Request) {
   if (!(await isSignedIn())) return Response.json({ error: "Требуется вход" }, { status: 401 });
-  const input = await request.json().catch(() => null);
+  let input;
+  try { input = await readLimitedJson(request, 16384); }
+  catch (error) { return Response.json({ error: "Некорректный или слишком большой JSON" }, { status: error instanceof BodyTooLarge ? 413 : 400 }); }
   const importedScenarioID = input?.scenario_id;
-  if (importedScenarioID !== undefined && !/^[0-9a-f-]{36}$/.test(importedScenarioID)) {
-    return Response.json({ error: "Неверный ID сценария" }, { status: 422 });
-  }
-  const mode: Mode = input?.mode;
-  const budget = Number(input?.budget);
-  const demand = Number(input?.demand);
-  if (!importedScenarioID && (!["operator", "city"].includes(mode) || !Number.isFinite(budget) || budget < 1000000 || budget > 50000000 || !Number.isFinite(demand) || demand < 50 || demand > 200)) {
-    return Response.json({ error: "Проверьте параметры сценария" }, { status: 422 });
+  if (typeof importedScenarioID !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(importedScenarioID)) {
+    return Response.json({ error: "Для запуска требуется ID сохранённого сценария" }, { status: 422 });
   }
   try {
-    let scenarioID = importedScenarioID;
-    if (!scenarioID) {
-      const scenario = await callBackend("/api/v1/scenarios", {
-        method: "POST", body: JSON.stringify({ name: `Демо · ${mode} · ${new Date().toISOString()}`, spec: makeDemo(mode, budget, demand) }),
-      });
-      if (scenario.status !== 201) return Response.json({ error: scenario.body?.detail || "Не удалось сохранить сценарий" }, { status: 502 });
-      scenarioID = scenario.body.id;
-    } else {
-      const existing = await callBackend(`/api/v1/scenarios/${scenarioID}`);
-      if (existing.status !== 200) return Response.json({ error: "Сценарий не найден" }, { status: 404 });
-    }
+    const scenarioID = importedScenarioID;
+    const existing = await callBackend(`/api/v1/scenarios/${scenarioID}`);
+    if (existing.status !== 200) return Response.json({ error: "Сценарий недоступен" }, { status: existing.status === 404 ? 404 : 502 });
     const run = await callBackend(`/api/v1/scenarios/${scenarioID}/runs`, {
       method: "POST", headers: { "Idempotency-Key": randomUUID() },
       ...(input?.run_spec ? { body: JSON.stringify({ run_spec: input.run_spec }) } : {}),

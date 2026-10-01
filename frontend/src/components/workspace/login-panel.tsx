@@ -2,6 +2,8 @@
 
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
+import NetworkFigure from "./network-figure";
+import { brand } from "@/lib/brand";
 
 export default function LoginPanel({
   password,
@@ -15,14 +17,14 @@ export default function LoginPanel({
   error: string;
 }) {
   return (
-    <main className="screen-centered">
+    <main className="login-screen">
+      <section className="login-story" aria-label="О платформе">
+        <div className="login-brand"><Image src={brand.logo} width={40} height={40} alt="" unoptimized /><span>{brand.name}</span></div>
+        <div className="login-story-content"><h2>Планирование<br />инфраструктуры</h2><NetworkFigure /></div>
+      </section>
+      <div className="login-form-area">
       <div className="login-panel">
-        <div className="brand-mark">
-          <Image src="/icon.svg" width={48} height={48} alt="" />
-        </div>
-        <p className="eyebrow">Платформа планирования</p>
-        <h1>EV Infrastructure</h1>
-        <p>Инженерные решения для зарядной сети, проверенные моделированием.</p>
+        <h1>Вход</h1>
         <form onSubmit={(event) => void onSubmit(event)}>
           <label htmlFor="password">Пароль доступа</label>
           <input
@@ -36,7 +38,7 @@ export default function LoginPanel({
             required
           />
           <button className="primary-button" type="submit">
-            Открыть рабочее пространство <ArrowRight size={17} />
+            Войти <ArrowRight size={17} aria-hidden="true" />
           </button>
         </form>
         {error && (
@@ -44,6 +46,7 @@ export default function LoginPanel({
             {error}
           </p>
         )}
+      </div>
       </div>
     </main>
   );

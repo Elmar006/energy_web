@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-01",
+  "scope": "frontend visual design and preserved application contracts",
+  "branch": "backend/algo",
+  "base_commit": "9f674c106a91758b267d09f23c9027481a0875fe",
+  "includes_uncommitted_changes": true,
+  "frontend_image": "sha256:2b10411c4432cc87ab0b6f3c74322ec0e83261dbf7816072c6dc8e8fec77ebf1",
+  "checks": {
+    "lint": "passed",
+    "typecheck": "passed",
+    "production_build": "passed",
+    "unit_tests_passed": 8,
+    "browser_tests_passed": 25,
+    "browser_duration_display": "1.2m"
+  },
+  "sources": {
+    "frontend/src/app/engineering.css": "2166d12266f7c297853c5803da7168d94a8d456d5f5238661efc181f61dc909c",
+    "frontend/src/app/globals.css": "5173699d354d09cce900abce0254d2929c9e33a6c255b99290f11ae77ff5931c",
+    "frontend/src/components/ui/section-tabs.tsx": "1fadd35a6c24cca5e33a0a166bd92f63dda61034b6ffd2a9459fd4843210c0ab",
+    "frontend/src/components/workspace/workspace-app.tsx": "1a3b8e57e1595035665a1b7011756570600e083f40c7011caf647d5575e25865",
+    "frontend/src/components/workspace/workspace-header.tsx": "669b43c8b6001a53b6c3320143e2721826fb57fb4d56891b5617ed5cfa2c6579",
+    "frontend/src/components/workspace/planning-controls.tsx": "c8d40f088326b163b3cfd64b3a3ad3435951825e9ed12971e73bbb87d4452870",
+    "frontend/src/components/workspace/planning-view.tsx": "499c327d55ef6db6ad92d4d6ab8da458d02f00cc13c4ff65a940348d21560bf3",
+    "frontend/src/components/workspace/login-panel.tsx": "529ff2d6b5d00acb7bab053d1b13126853e0b28eef06490dac7b5fd90caf4976",
+    "frontend/src/components/workspace/planning-empty.tsx": "c94816110a8294cd4f6b2fde583ad461c8402a69416d80787c166c38fb09141e",
+    "frontend/src/components/workspace/network-figure.tsx": "9dcaa76afe3a3b0dd6a709ef15fad7dd724ccd2f168a615977e8ff9b96f1c347",
+    "frontend/src/components/workbench.tsx": "6f8329ca81e55650a70f3aa1d710ef794534035ac718b3c0d0f8105d3d966a59",
+    "frontend/src/components/workbench-scenario.tsx": "84cdd6fb4041ab20574cfd4494eea18122a590d0509f78c067cd5ba458bb2b62",
+    "frontend/e2e/engineering.spec.ts": "703b805cad2b87882a685a8d325d7fb05bed8f94b24bd730b0a1596d7e2c8654",
+    "frontend/e2e/login-visual.spec.ts": "9185e5708b9b35023103c917f9aae22be28ada77f91ad5560a2ce3d31beac192",
+    "frontend/e2e/planning.spec.ts": "15e15158b20f42b29304347c9265f77eabb3bf78044d34b88f82fb20dbb67907",
+    "frontend/e2e/production-boundaries.spec.ts": "8b25b2fc31ac9ef0c400b6c85527ed8357c4dfb686c383354db5d80bb9d8467b",
+    "frontend/package.json": "a8f215ee4c4006a9644f8594f707033a8d6c9e9bea2629552333db9b06aa0b2e",
+    "frontend/package-lock.json": "232b380e13a12b7247c2d0f25adc57175f079d008214009e73179bb373353742"
+  },
+  "screenshots": [
+    {
+      "file": "data-desktop.png",
+      "width": 65536,
+      "height": 4292542531,
+      "sha256": "6f22f4f60a866151b052b9de19cb35611dc63115a58393e3f75109082a02f650"
+    },
+    {
+      "file": "fleet-desktop.png",
+      "width": 65536,
+      "height": 4292542531,
+      "sha256": "3f07daa6e432ee8f27dd8533290623bd61fbde7afc752461e7bc9138f788c3db"
+    },
+    {
+      "file": "login-desktop.png",
+      "width": 65536,
+      "height": 4292542531,
+      "sha256": "fe9ed281f90b7a65ed43b0cf65b3819e32c9628f06c2708f4edf22eb4853288f"
+    },
+    {
+      "file": "planning-desktop.png",
+      "width": 65536,
+      "height": 4292542531,
+      "sha256": "8eb72aa1e8e305cb8a61f7073f4be532ce81f1a74e63cdc44c5eb43d572be9c4"
+    },
+    {
+      "file": "planning-mobile.png",
+      "width": 65536,
+      "height": 4292542531,
+      "sha256": "19f64bb103dd711f011dce8e6369c1bd0fd6c4d98c744266b6c8f5252380c606"
+    },
+    {
+      "file": "results-desktop.png",
+      "width": 65536,
+      "height": 4292542531,
+      "sha256": "a78385b716f574ae57ca4d4478ee907f8b1179445395fbafc61018f0485f9fa7"
+    },
+    {
+      "file": "results-mobile-detail.png",
+      "width": 65536,
+      "height": 4292542531,
+      "sha256": "375dd548e2f6e733e136bdb8c134ff79be75c60c77344a0a7b46b0333b042285"
+    },
+    {
+      "file": "results-mobile.png",
+      "width": 65536,
+      "height": 4292542531,
+      "sha256": "142780a965d8cf70b600a5a8a17cca9c030a6fea035252befd1ef033004607f7"
+    }
+  ]
+}

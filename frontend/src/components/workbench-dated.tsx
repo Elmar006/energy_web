@@ -23,14 +23,12 @@ export default function DatedSection() {
       {section === "dated" && (
         <div className="wb-body">
           <p className="wb-note">
-            <Info size={17} /> Календарь: 1–14 последовательных дней, явные зоны
-            заявок и типового профиля. Экономика короткого периода
-            масштабируется заданным annualization_factor.
+            <Info size={17} aria-hidden="true" /> Календарь: 1–14 последовательных дней. Годовая экономика рассчитывается с коэффициентом annualization_factor.
           </p>
           <DatedFields
             value={datedJson}
             onChange={setDatedJson}
-            zones={spec.zones.map((item) => item.id)}
+            zones={(spec?.zones ?? []).map((item) => item.id)}
           />
           <details className="wb-advanced">
             <summary>Заявки и календарь · полный JSON</summary>

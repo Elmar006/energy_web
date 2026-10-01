@@ -52,8 +52,7 @@ export default function GeoSection() {
         <div className="wb-body">
           <p className="wb-note">
             <Info size={17} /> Четыре GeoJSON FeatureCollection: demand_zone,
-            candidate_site, grid_node и travel_edge. Числа берутся из свойств
-            объектов, а не из карты.
+            candidate_site, grid_node и travel_edge. Расчётные параметры — в свойствах объектов.
           </p>
           {metadata}
           <div className="wb-fields">
@@ -143,7 +142,7 @@ export default function GeoSection() {
                     }))
                   }
                   options={[
-                    { value: "", label: "Выберите UUID версии" },
+                    { value: "", label: "Выберите версию набора" },
                     ...datasets
                       .filter((item) => item.format === "geojson")
                       .map((item) => ({

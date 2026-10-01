@@ -14,6 +14,28 @@ import (
 
 const testDemand = `{"schema_version":"demand-dataset-v1","service_calendar":{"schema_version":"service-calendar-v1","time_zone":"Europe/Moscow","covered_dates":["2027-05-03"],"request_zone_ids":["z1"],"days":[{"date":"2027-05-03","day_type":"weekday","season":"spring"}]},"charging_requests":[]}`
 
+func TestOptionalDatasetNullPreservesDerivedAndInlineSnapshots(t *testing.T) {
+	for _, spec := range []string{
+		`{"id":"csv-derived","demand_dataset":null,"service_calendar":null,"charging_requests":[]}`,
+		`{"id":"inline","demand_dataset": null ,"service_calendar":{"time_zone":"UTC"},"charging_requests":[]}`,
+		`{"id":"legacy"}`,
+	} {
+		hydrated, manifest, err := HydrateDemand(context.Background(), json.RawMessage(spec), nil)
+		if err != nil || manifest != nil || string(hydrated) != spec {
+			t.Fatalf("optional reference changed snapshot: %s %v", hydrated, err)
+		}
+	}
+	for _, spec := range []string{
+		`{"demand_dataset":{}}`, `{"demand_dataset":"null"}`,
+		`{"demand_dataset":[],"service_calendar":null}`,
+		`{"demand_dataset":{},"demand_dataset":null}`,
+	} {
+		if _, _, err := HydrateDemand(context.Background(), json.RawMessage(spec), nil); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("invalid reference accepted: %s %v", spec, err)
+		}
+	}
+}
+
 func TestLocalArtifactImmutabilityAndIntegrity(t *testing.T) {
 	ctx := context.Background()
 	local := Local{Root: t.TempDir()}

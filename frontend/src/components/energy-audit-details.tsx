@@ -28,10 +28,14 @@ export default function EnergyAuditDetails({
   rows,
   siteNames,
   truncated,
+  scenarioId,
+  yearValue,
 }: {
   rows: Audit[];
   siteNames: Record<string, string>;
   truncated?: boolean;
+  scenarioId?: string;
+  yearValue?: number;
 }) {
   const [scenario, setScenario] = useState("");
   const [year, setYear] = useState("");
@@ -39,8 +43,8 @@ export default function EnergyAuditDetails({
   const years = [...new Set(rows.map((item) => item.year))].sort(
     (a, b) => a - b,
   );
-  const selectedScenario = scenario || scenarios[0];
-  const selectedYear = year || String(years[0]);
+  const selectedScenario = scenarioId ?? (scenario || scenarios[0]);
+  const selectedYear = yearValue !== undefined ? String(yearValue) : year || String(years[0]);
   const filtered = rows.filter(
     (item) =>
       item.scenario_id === selectedScenario &&
@@ -55,7 +59,7 @@ export default function EnergyAuditDetails({
           {rows.length} строк{truncated ? " · ответ усечён сервером" : ""}
         </span>
       </div>
-      <div className="audit-filters">
+      <div className="audit-filters" hidden={scenarioId !== undefined && yearValue !== undefined}>
         <div>
           Сценарий
           <Select

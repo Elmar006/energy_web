@@ -30,20 +30,17 @@ export default function MobilitySection() {
       {view === "mobility" && (
         <div className="wb-body">
           <p className="wb-note">
-            <Info size={17} /> Потенциальные заявки из переданных маршрутов.
-            Публичная зарядка условно учтена при проверке возможности
-            последующих поездок; репрезентативность маршрутов подтверждает
-            поставщик.
+            <Info size={17} aria-hidden="true" /> Публичная зарядка учитывается как допущение. Полноту выборки маршрутов подтверждает поставщик.
           </p>
           <p className="wb-help">
-            Зоны: {spec.zones.map((item) => item.id).join(", ")}. Время с
+            Зоны: {(spec?.zones ?? []).map((item) => item.id).join(", ")}. Время с
             UTC-смещением, расстояние в км, энергия в кВт·ч. Укажите
             covered_dates, replace_zone_ids, источник, машины и активности.
           </p>
           <MobilityFields
             value={mobilityJson}
             onChange={setMobilityJson}
-            zones={spec.zones.map((item) => item.id)}
+            zones={(spec?.zones ?? []).map((item) => item.id)}
           />
           <details className="wb-advanced">
             <summary>Машины, поездки и стоянки · полный JSON</summary>

@@ -23,7 +23,7 @@ export type Props = {
   section: "editor" | "csv" | "geo" | "dated";
   model: "corridors/check" | "fleets/schedule";
   csvType: "sessions" | "grid-headroom";
-  spec: PlanningSpec;
+  spec: PlanningSpec | null;
   scenario: Scenario | null;
   onSaved: (scenario: Scenario) => void;
 };
@@ -42,12 +42,12 @@ export async function api(path: string, init?: RequestInit) {
     cache: "no-store",
   });
   const body = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new Error(
-      typeof body?.detail === "string"
-        ? body.detail
-        : body?.error || "HTTP " + response.status,
-    );
+  if (!response.ok) {
+    const detail = Array.isArray(body?.detail)
+      ? body.detail.map((item: { loc?: (string | number)[]; msg?: string }) => `${item.loc?.filter(x => x !== "body").join(" → ") || "Вход"}: ${item.msg || "Некорректное значение"}`).join("; ")
+      : typeof body?.detail === "string" ? body.detail : body?.error;
+    throw new Error(detail || "Запрос не выполнен: HTTP " + response.status);
+  }
   return body;
 }
 export function JsonEditor({

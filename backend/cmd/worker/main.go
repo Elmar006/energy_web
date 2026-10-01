@@ -5,14 +5,20 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/Elmar006/energy_web/backend/internal/artifact"
+	"github.com/Elmar006/energy_web/backend/internal/config"
 	"github.com/Elmar006/energy_web/backend/internal/store"
 	"github.com/Elmar006/energy_web/backend/internal/worker"
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	if err := config.ValidateEnvironment(os.Getenv("APP_ENV")); err != nil {
+		slog.Error("worker environment configuration", "error", err)
+		os.Exit(1)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	db, err := store.New(ctx, os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -20,6 +26,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+	if err := config.ValidateRuntimeDatabase(ctx, db.DB, os.Getenv("APP_ENV")); err != nil {
+		slog.Error("runtime database configuration", "error", err)
+		os.Exit(1)
+	}
 	url := os.Getenv("ENGINE_URL")
 	if url == "" {
 		url = "http://engine:8090"

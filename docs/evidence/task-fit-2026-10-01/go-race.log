@@ -1,0 +1,24 @@
+go: downloading github.com/jackc/pgx/v5 v5.9.2
+go: downloading github.com/redis/go-redis/v9 v9.11.0
+go: downloading github.com/cespare/xxhash/v2 v2.3.0
+go: downloading github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f
+go: downloading github.com/jackc/puddle/v2 v2.2.2
+go: downloading golang.org/x/text v0.39.0
+go: downloading github.com/jackc/pgpassfile v1.0.0
+go: downloading github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761
+go: downloading golang.org/x/sync v0.21.0
+?   	github.com/Elmar006/energy_web/backend/cmd/api	[no test files]
+?   	github.com/Elmar006/energy_web/backend/cmd/import-geojson	[no test files]
+?   	github.com/Elmar006/energy_web/backend/cmd/migrate	[no test files]
+?   	github.com/Elmar006/energy_web/backend/cmd/runtime-role	[no test files]
+?   	github.com/Elmar006/energy_web/backend/cmd/worker	[no test files]
+ok  	github.com/Elmar006/energy_web/backend/internal/api	2.342s
+ok  	github.com/Elmar006/energy_web/backend/internal/artifact	1.171s
+?   	github.com/Elmar006/energy_web/backend/internal/cache	[no test files]
+ok  	github.com/Elmar006/energy_web/backend/internal/config	1.277s
+ok  	github.com/Elmar006/energy_web/backend/internal/geography	1.030s
+ok  	github.com/Elmar006/energy_web/backend/internal/geoimport	1.535s
+ok  	github.com/Elmar006/energy_web/backend/internal/migrate	1.299s
+ok  	github.com/Elmar006/energy_web/backend/internal/planning	1.564s
+ok  	github.com/Elmar006/energy_web/backend/internal/store	3.762s
+ok  	github.com/Elmar006/energy_web/backend/internal/worker	2.197s
