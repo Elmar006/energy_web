@@ -1,3 +1,7 @@
 # Benchmark provenance hashes Python source bytes. Keep their line endings
 # identical in Windows, WSL and Linux checkouts.
 engine/energy/*.py text eol=lf
+
+# Submission documents contain binary font and image streams.
+/docs/commission/submission/*.pdf binary
+/docs/commission/submission/*.pptx binary
