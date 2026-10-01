@@ -19,7 +19,7 @@ export default function LoginPanel({
   return (
     <main className="login-screen">
       <section className="login-story" aria-label="О платформе">
-        <div className="login-brand"><Image src={brand.logo} width={40} height={40} alt="" /><span>{brand.name}</span></div>
+        <div className="login-brand"><Image src={brand.logo} width={40} height={40} alt="" unoptimized /><span>{brand.name}</span></div>
         <div className="login-story-content"><h2>Планирование<br />инфраструктуры</h2><NetworkFigure /></div>
       </section>
       <div className="login-form-area">

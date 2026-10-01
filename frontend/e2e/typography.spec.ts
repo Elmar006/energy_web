@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 test("локальные шрифты загружаются и разделяют заголовки и поля", async ({ page }) => {
   await page.route("**/api/session", route => route.fulfill({ json: { signed_in: true } }));
@@ -12,9 +14,13 @@ test("локальные шрифты загружаются и разделяю
   await expect(page).toHaveTitle("Энергоконтур — планирование зарядной инфраструктуры");
   await expect(page.locator(".brand strong")).toHaveText("Энергоконтур");
   const logo = page.locator(".brand img");
-  await expect(logo).toHaveAttribute("src", /brand-logo\.png/);
+  await expect(logo).toHaveAttribute("src", "/brand-logo.png");
   await expect.poll(() => logo.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand-logo.png");
+  const artwork = await page.request.get("/brand-logo.png");
+  expect(artwork.ok()).toBe(true);
+  const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+  expect(sha256(await artwork.body())).toBe(sha256(readFileSync("public/brand-logo.png")));
   const fonts = await page.evaluate(async () => {
     await document.fonts.ready;
     const normalize = (family: string) => family.split(",")[0].trim().replaceAll('"', "").replaceAll("'", "");

@@ -149,13 +149,13 @@ Redis ускоряет выдачу тайлов; задачи и результ
 Нужны Git и Docker с Compose. Команды выполняются **из корня репозитория**.
 
 ```sh
-cp .env.example .env
+test -f .env || cp .env.example .env
 # Задайте секреты в .env, затем:
 docker compose up -d --build
 docker compose ps
 ```
 
-Для PowerShell первая команда: `Copy-Item .env.example .env`. Существующий `.env` не перезаписывайте.
+Для PowerShell первая команда: `if (-not (Test-Path .env)) { Copy-Item .env.example .env }`.
 
 | Переменная | Назначение |
 |---|---|

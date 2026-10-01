@@ -13,7 +13,7 @@ npm run typecheck
 npm run build
 ```
 
-Для локального Next.js задайте `API_URL_INTERNAL=http://localhost:58080`, пароль входа и SESSION_SECRET. Docker получает runtime-конфигурацию из корневого `.env`; встроенный dev-сервер обычно работает на 3000, опубликованный Compose — на 53001. Точное назначение переменных и безопасный запуск: [START_HERE.md](../START_HERE.md).
+Для локального Next.js задайте `ENERGY_API_URL=http://localhost:58080`, `APP_ENV=development`, серверный `API_TOKEN`, пароль входа и `SESSION_SECRET`. Docker получает runtime-конфигурацию из корневого `.env`; встроенный dev-сервер обычно работает на 3000, опубликованный Compose — на 53001. Точное назначение переменных и безопасный запуск: [START_HERE.md](../START_HERE.md).
 
 Основной код: `src/components/workspace` — планирование; `workbench-*.tsx` — данные и отдельные модели; `src/components/ui` — доступные элементы; `runtime` — политика сессий/Origin/лимитов. `src/lib/brand.ts` содержит русское название и путь к `public/brand-logo.png`. Шрифты загружаются через next/font/local из `src/app/fonts`, лицензии и SHA находятся рядом.
 

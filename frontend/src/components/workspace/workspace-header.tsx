@@ -31,7 +31,7 @@ export default function WorkspaceHeader({
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark small">
-            <Image src={brand.logo} width={34} height={34} alt="" />
+            <Image src={brand.logo} width={34} height={34} alt="" unoptimized />
           </span>
           <strong>{brand.name}</strong>
         </div>
