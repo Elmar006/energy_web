@@ -1,0 +1,86 @@
+[
+  {
+    "asset": "go.svg",
+    "source": "https://img.shields.io/badge/Go-1.26-111111?style=for-the-badge&logo=go&logoColor=white&labelColor=262626",
+    "documentation": "https://go.dev/",
+    "logo": "go",
+    "bytes": 2849
+  },
+  {
+    "asset": "postgresql.svg",
+    "source": "https://img.shields.io/badge/PostgreSQL-18_%2B_PostGIS-111111?style=for-the-badge&logo=postgresql&logoColor=white&labelColor=262626",
+    "documentation": "https://www.postgresql.org/",
+    "logo": "postgresql",
+    "bytes": 7661
+  },
+  {
+    "asset": "redis.svg",
+    "source": "https://img.shields.io/badge/Redis-8-111111?style=for-the-badge&logo=redis&logoColor=white&labelColor=262626",
+    "documentation": "https://redis.io/",
+    "logo": "redis",
+    "bytes": 1665
+  },
+  {
+    "asset": "docker.svg",
+    "source": "https://img.shields.io/badge/Docker-111111?style=for-the-badge&logo=docker&logoColor=white&labelColor=262626",
+    "documentation": "https://www.docker.com/",
+    "logo": "docker",
+    "bytes": 2947
+  },
+  {
+    "asset": "python.svg",
+    "source": "https://img.shields.io/badge/Python-3.13-111111?style=for-the-badge&logo=python&logoColor=white&labelColor=262626",
+    "documentation": "https://www.python.org/",
+    "logo": "python",
+    "bytes": 2706
+  },
+  {
+    "asset": "fastapi.svg",
+    "source": "https://img.shields.io/badge/FastAPI-111111?style=for-the-badge&logo=fastapi&logoColor=white&labelColor=262626",
+    "documentation": "https://fastapi.tiangolo.com/",
+    "logo": "fastapi",
+    "bytes": 1063
+  },
+  {
+    "asset": "highs.svg",
+    "source": "https://img.shields.io/badge/Pyomo_%2B_HiGHS-MILP-111111?style=for-the-badge&logo=cplusplus&logoColor=white&labelColor=262626",
+    "documentation": "https://highs.dev/",
+    "logo": "cplusplus",
+    "bytes": 1730
+  },
+  {
+    "asset": "simpy.svg",
+    "source": "https://img.shields.io/badge/SimPy-111111?style=for-the-badge&logo=python&logoColor=white&labelColor=262626",
+    "documentation": "https://simpy.readthedocs.io/",
+    "logo": "python",
+    "bytes": 2620
+  },
+  {
+    "asset": "nextjs.svg",
+    "source": "https://img.shields.io/badge/Next.js-16-111111?style=for-the-badge&logo=nextdotjs&logoColor=white&labelColor=262626",
+    "documentation": "https://nextjs.org/",
+    "logo": "nextdotjs",
+    "bytes": 1115
+  },
+  {
+    "asset": "react.svg",
+    "source": "https://img.shields.io/badge/React-19-111111?style=for-the-badge&logo=react&logoColor=white&labelColor=262626",
+    "documentation": "https://react.dev/",
+    "logo": "react",
+    "bytes": 4581
+  },
+  {
+    "asset": "typescript.svg",
+    "source": "https://img.shields.io/badge/TypeScript-111111?style=for-the-badge&logo=typescript&logoColor=white&labelColor=262626",
+    "documentation": "https://www.typescriptlang.org/",
+    "logo": "typescript",
+    "bytes": 2332
+  },
+  {
+    "asset": "2gis.svg",
+    "source": "https://img.shields.io/badge/2GIS-MapGL-111111?style=for-the-badge&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI%2BPHBhdGggZD0ibTMgNiA2LTMgNiAzIDYtM3YxNWwtNiAzLTYtMy02IDN6Ii8%2BPHBhdGggZD0iTTkgM3YxNU0xNSA2djE1Ii8%2BPC9zdmc%2B&logoColor=white&labelColor=262626",
+    "documentation": "https://docs.2gis.com/en/mapgl/overview",
+    "logo": "project map symbol",
+    "bytes": 998
+  }
+]

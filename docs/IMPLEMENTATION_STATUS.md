@@ -1,23 +1,23 @@
 # Матрица возможностей и технических ограничений
 
-Документ описывает действующее поведение Энергоконтура. Публичные поля определяются [OpenAPI](../openapi.json), конфигурация запуска — [RunSpec](RUN_SPEC.md). Запланированная возможность не считается реализованной по наличию интерфейса или текста в документации.
+Документ описывает действующее поведение Энергоконтура. Публичные поля определяются [OpenAPI](../openapi.json), конфигурация запуска — [RunSpec](CALCULATIONS.md#runspec). Запланированная возможность не считается реализованной по наличию интерфейса или текста в документации.
 
 ## Действующий контур
 
 | Область | Реализация | Проверка / контракт |
 |---|---|---|
 | Сценарии | Неизменяемый снимок PlanningInput, версии источников, хеш сохранённого JSONB, чтение и удаление с проверкой зависимостей | [Архитектура](ARCHITECTURE.md), store/API integration |
-| Запуск | Транзакционное создание RunSpec и задания; idempotency key, lease, heartbeat, attempt fencing, события и отмена | [RUN_SPEC.md](RUN_SPEC.md), worker/store race integration |
+| Запуск | Транзакционное создание RunSpec и задания; idempotency key, lease, heartbeat, attempt fencing, события и отмена | [RunSpec](CALCULATIONS.md#runspec), worker/store race integration |
 | Хранение | PostgreSQL/PostGIS, numbered migrations с advisory lock/checksum, индексы очереди/списков/GiST | `backend/migrations`, migrate/store integration |
-| Геоданные | Нормализованный GeoJSON, идемпотентный конкурентный импорт, версии, GeoJSON/MVT, Redis TTL 30 с с обходом при отказе | [DATASET_SCENARIOS.md](DATASET_SCENARIOS.md) |
-| CSV | Зарядные сессии и полный почасовой резерв, исходные байты/SHA, versioned transformation, новый снимок | [DIRECT_UPLOAD.md](DIRECT_UPLOAD.md) |
-| Спрос | Параметрическая потребность из переданных поездок/стоянок, домашний доступ и батарея; раздельный профиль сессий | [MOBILITY_DEMAND.md](MOBILITY_DEMAND.md), [границы наблюдений](REAL_DATA_CALCULATION.md) |
+| Геоданные | Нормализованный GeoJSON, идемпотентный конкурентный импорт, версии, GeoJSON/MVT, Redis TTL 30 с с обходом при отказе | [GeoJSON и версии наборов](DATA_INGESTION.md#geojson-и-версии-наборов) |
+| CSV | Зарядные сессии и полный почасовой резерв, исходные байты/SHA, versioned transformation, новый снимок | [Импорт CSV](DATA_INGESTION.md#csv-сессии-и-сетевой-резерв) |
+| Спрос | Параметрическая потребность из переданных поездок/стоянок, домашний доступ и батарея; раздельный профиль сессий | [MOBILITY_DEMAND.md](MOBILITY_DEMAND.md), [границы наблюдений](DATA_INGESTION.md#интерпретация-наблюдений-и-модельных-профилей) |
 | Календарь | Датированные заявки, IANA-пояс, окна и фактическая длительность суток, demand artifact SHA; legacy 24 ч явно сохранён | [DATED_DEMAND.md](DATED_DEMAND.md) |
 | Размещение | Почасовой многопериодный MILP, комплект/год, существующие и закреплённые площадки, бюджет/дорожная доступность | `engine/energy/optimizer.py`, brute-force малых задач |
 | Энергетика | Посты/станция/общий узел, сроки усиления, PV, накопитель с КПД/SoC/режимами и циклическим балансом | optimizer/dispatch, энергетические тесты |
-| Риски / экономика | Общие инвестиции для сценариев, expected/worst_case/CVaR; CAPEX, OPEX, NPV proxy, альтернативы по порогам сервиса | [ALTERNATIVES_MODEL.md](ALTERNATIVES_MODEL.md), validation/optimizer tests |
+| Риски / экономика | Общие инвестиции для сценариев, expected/worst_case/CVaR; CAPEX, OPEX, NPV proxy, альтернативы по порогам сервиса | [Альтернативы](CALCULATIONS.md#альтернативы), validation/optimizer tests |
 | Эксплуатация | Отдельная SimPy-логика, минуты, очередь, дедлайн, SoC, кривые датированных машин, явные переезды, отказы/ремонт | simulation/dated/grid/dispatch tests |
-| Приёмка | Отдельные execution/model/service статусы; accepted/rejected/inconclusive, dev/evaluation seed, ограниченные варианты улучшения | [SERVICE_ACCEPTANCE.md](SERVICE_ACCEPTANCE.md), RunSpec v2 |
+| Приёмка | Отдельные execution/model/service статусы; accepted/rejected/inconclusive, dev/evaluation seed, ограниченные варианты улучшения | [Приёмка плана](CALCULATIONS.md#приёмка-плана), RunSpec v2 |
 | Парк | Отдельный MILP по слотам, рейсам, окнам, SoC, постам и общему пределу мощности; GTFS CLI с операционным JSON | fleet/GTFS tests |
 | Коридор | Отдельная достижимость маршрута, запас энергии, сезонный множитель и отказ станции | corridor tests |
 | Интерфейс | Выбор/импорт источника, семь представлений результата, реестр площадок, сравнение, JSON-экспорт, 2ГИС при доступном ключе/тайлах | [Handoff](frontend/BACKEND_HANDOFF.md), [UI](frontend/ENGINEERING_UI_IMPLEMENTATION.md) |

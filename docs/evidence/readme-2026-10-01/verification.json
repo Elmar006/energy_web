@@ -1,0 +1,121 @@
+{
+  "date": "2026-10-01",
+  "branch": "backend/algo",
+  "base_commit": "74e654a5e751ee6192185f1e7109e7c96c0b5c12",
+  "frontend_image": "sha256:5d88c1cd5e7393dfd874f7db4489afab0def74dbb914cc0e5d50910fc56f8cb8",
+  "engine_business_code_changed": false,
+  "tests": {
+    "python": 266,
+    "python_seconds": 41.63,
+    "playwright": 26,
+    "frontend_runtime": 8,
+    "eslint": "passed",
+    "typescript": "passed",
+    "production_build": "passed",
+    "openapi_reproducible": true
+  },
+  "screenshot": {
+    "run_id": "ea23721a-83ef-4f01-b2e5-86a5b48a0e65",
+    "scenario_id": "a016284f-ba25-457f-9fc1-6eec14d4bb97",
+    "selected_year": 2028,
+    "condition": "base",
+    "scenario_parameters": "assumed",
+    "caption_added_to_image": false
+  },
+  "assets": [
+    {
+      "path": "docs/assets/interface-desktop.png",
+      "sha256": "7dd3a46c7899720b665adefe1a746b480a5bb13a5fc902dfa4e2587f1941eedf",
+      "bytes": 95111
+    },
+    {
+      "path": "docs/assets/interface-mobile-result.png",
+      "sha256": "1429a0c9b372a66108faed179c84ad54a48e9c6adb2297df9662d63c005b7f09",
+      "bytes": 37916
+    },
+    {
+      "path": "docs/assets/interface-mobile.png",
+      "sha256": "4a9c6fc10c97c998a9a08d9227d6cd2a61009e1492696d1e1eafca0d9e26915f",
+      "bytes": 33374
+    },
+    {
+      "path": "docs/assets/interface-showcase.png",
+      "sha256": "fc8aa4d1bc2ea0850f4914c2e5270ce21e3f7dd280c37deb3034b8c5eddad3d0",
+      "bytes": 72974
+    },
+    {
+      "path": "docs/assets/stack/2gis.svg",
+      "sha256": "f73ed976b7b038c02d134ebfed31058ead9b36ffe2aa4126059c4e82222a6821",
+      "bytes": 998
+    },
+    {
+      "path": "docs/assets/stack/docker.svg",
+      "sha256": "922cbb1332e7adb3b2a53fefd2a37444b075eb516f977334306ff1e0b0aad2da",
+      "bytes": 2947
+    },
+    {
+      "path": "docs/assets/stack/fastapi.svg",
+      "sha256": "de8de889471125fe7c85d3bc3b5384e41e019d0de4bd6bbbcff0089df1b930cd",
+      "bytes": 1063
+    },
+    {
+      "path": "docs/assets/stack/go.svg",
+      "sha256": "827918c22f739ad7777ba662e313ce0c3f8d4befe0d39b2e30208cef73692ac4",
+      "bytes": 2849
+    },
+    {
+      "path": "docs/assets/stack/highs.svg",
+      "sha256": "8bc10a44a19d2acf0d62598ef2a01bc4ab928dc8dffd72e79c3019e4dac3039d",
+      "bytes": 1730
+    },
+    {
+      "path": "docs/assets/stack/nextjs.svg",
+      "sha256": "7d06e6cd2c216701348b83236f3844e48e3b6135decede71c49189c843090069",
+      "bytes": 1115
+    },
+    {
+      "path": "docs/assets/stack/postgresql.svg",
+      "sha256": "20190ef2890d1e994a4fa0ab7ecf11986453c6dc12075c678010b2d3ea1c1581",
+      "bytes": 7661
+    },
+    {
+      "path": "docs/assets/stack/python.svg",
+      "sha256": "ee0a9259e5a6d498751927422abf866e40ea1fb8277775d983e4c6e0ce873952",
+      "bytes": 2706
+    },
+    {
+      "path": "docs/assets/stack/react.svg",
+      "sha256": "5d128c505ade623282cb2bb2ff43dbe67c5593f2e06afd08dba1a19316726b53",
+      "bytes": 4581
+    },
+    {
+      "path": "docs/assets/stack/redis.svg",
+      "sha256": "bf7d1042ca3f4e3c1c6165d271991c8074d69729657333b2e9816a7329831ed9",
+      "bytes": 1665
+    },
+    {
+      "path": "docs/assets/stack/simpy.svg",
+      "sha256": "7377cdc5f55e1c4a90a75b90c8bb0753a6b7032e47b0c04032132fa06f210bc8",
+      "bytes": 2620
+    },
+    {
+      "path": "docs/assets/stack/typescript.svg",
+      "sha256": "883d55c795938f847b16a04b9be1f250aa92f4a6d59e0689c9e3773408915ec1",
+      "bytes": 2332
+    },
+    {
+      "path": "frontend/public/brand-mark.png",
+      "sha256": "c9ee20fc73f18a07689f1c113d9df39a54abd66b31b800996a82afa6a6aedf0d",
+      "bytes": 1094875
+    }
+  ],
+  "documentation": {
+    "markdown_files": 26,
+    "local_links_checked": 242,
+    "broken_links": [],
+    "conflict_markers": [],
+    "preserved_non_markdown_artifacts": 34,
+    "readme_emoji": false,
+    "showcase_visible_labels": false
+  }
+}
